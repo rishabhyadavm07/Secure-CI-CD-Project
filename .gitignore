@@ -1,0 +1,27 @@
+# Secrets
+.env
+*.pem
+*.key
+*.crt
+
+# Docker
+*.tar
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+
+# Kubernetes secrets
+secrets.yaml

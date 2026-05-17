@@ -1,0 +1,107 @@
+[
+  {
+    "batch": 1,
+    "batch_id": "batch_01_images_1_to_20",
+    "question_count": 36
+  },
+  {
+    "batch": 2,
+    "batch_id": "batch_images_21_to_40",
+    "question_count": 19
+  },
+  {
+    "batch": 3,
+    "batch_id": "batch_41_to_60",
+    "question_count": 17
+  },
+  {
+    "batch": 4,
+    "batch_id": "batch_4",
+    "question_count": 0
+  },
+  {
+    "batch": 5,
+    "batch_id": "batch_81_to_100",
+    "question_count": 22
+  },
+  {
+    "batch": 6,
+    "batch_id": "batch_101_to_120",
+    "question_count": 22
+  },
+  {
+    "batch": 7,
+    "batch_id": "batch_121_to_140",
+    "question_count": 23
+  },
+  {
+    "batch": 8,
+    "batch_id": "batch_141_to_160",
+    "question_count": 21
+  },
+  {
+    "batch": 9,
+    "batch_id": "batch_161_to_179",
+    "question_count": 22
+  },
+  {
+    "batch": 10,
+    "batch_id": "batch_180_to_199",
+    "question_count": 22
+  },
+  {
+    "batch": 11,
+    "batch_id": "batch_200_to_219",
+    "question_count": 27
+  },
+  {
+    "batch": 12,
+    "batch_id": "batch_220_to_239",
+    "question_count": 23
+  },
+  {
+    "batch": 13,
+    "batch_id": "batch_240_to_259",
+    "question_count": 19
+  },
+  {
+    "batch": 14,
+    "batch_id": "batch_260_to_278",
+    "question_count": 22
+  },
+  {
+    "batch": 15,
+    "batch_id": "batch_279_to_298",
+    "question_count": 25
+  },
+  {
+    "batch": 16,
+    "batch_id": "batch_299_to_318",
+    "question_count": 19
+  },
+  {
+    "batch": 17,
+    "batch_id": "batch_319_to_337",
+    "question_count": 8
+  },
+  {
+    "batch": 18,
+    "batch_id": "batch_338_to_356",
+    "question_count": 6
+  },
+  {
+    "batch": 19,
+    "batch_id": "batch_357_to_375",
+    "question_count": 6
+  },
+  {
+    "batch": 20,
+    "batch_id": "batch_376_to_392",
+    "question_count": 5
+  },
+  {
+    "batch": 21,
+    "batch_id": "batch_393_to_410",
+    "question_count": 5
+  }
+]

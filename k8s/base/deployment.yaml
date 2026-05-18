@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-site
+  namespace: quiz-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quiz-site
+  template:
+    metadata:
+      labels:
+        app: quiz-site
+    spec:
+      containers:
+        - name: quiz-site
+          image: ghcr.io/rishabhyadavm07/secure-ci-cd-project/quiz-site:latest
+          ports:
+            - containerPort: 80

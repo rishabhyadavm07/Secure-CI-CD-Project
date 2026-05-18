@@ -1,1631 +1,1281 @@
-# Secure CI/CD Pipeline Project Guide (Windows 11 Edition)
+# Secure CI/CD Pipeline — Windows 11 Project Plan
 
-## 📋 Project Overview
-
-**Project Name:** Building a Production-Grade Secure CI/CD Pipeline  
-**Duration:** 4-6 weeks  
-**Difficulty:** Intermediate to Advanced  
-**Platform:** Windows 11 with WSL2  
-**Outcome:** Deploy your website through a security-hardened, automated pipeline with container scanning, secret detection, policy enforcement, and Kubernetes orchestration
+**Platform:** Windows 11 + WSL2 (Kali Linux) + Docker Desktop
+**Duration:** 6–8 weeks
+**Strategy:** Build a working pipeline first. Then secure it, layer by layer.
 
 ---
 
-## 🎯 Learning Objectives
+## How to Read This Plan
 
-By completing this project, you will:
-- ✅ Implement DevSecOps practices (shift-left security)
-- ✅ Build automated security scanning into CI/CD
-- ✅ Deploy containerized applications to Kubernetes
-- ✅ Apply Pod Security Standards and Network Policies
-- ✅ Implement runtime security monitoring
-- ✅ Create security dashboards and alerting
-- ✅ Document security controls (SSPM-style validation)
+Every major step in the Securing phase (Phase B) answers four questions:
 
----
+1. **What is the vulnerability?** — What can go wrong without this control?
+2. **Why this specific tool?** — What makes it the right choice here, and what are the trade-offs?
+3. **What do real enterprises use?** — What you would find at AWS, Google, banks, or large SaaS companies.
+4. **What can be improved?** — The enterprise upgrade path beyond what we are building here.
 
-## 💻 Hardware Specifications
-
-### Your Hardware (Perfect for This Project!)
-- **CPU:** Multi-core (sufficient for Kubernetes)
-- **RAM:** 16 GB ✅ (Recommended for K8s cluster)
-- **GPU:** RTX 3050 (Not needed for CI/CD, but great for future ML/AI projects)
-- **Storage:** SSD recommended for Docker performance
-- **OS:** Windows 11
-- **Network:** Stable internet connection
-
-**Assessment:** Your laptop exceeds requirements! 16GB RAM is perfect for running:
-- Docker Desktop with Kubernetes
-- Multiple security scanning tools
-- Prometheus + Grafana monitoring stack
-- Development environment
+This structure teaches you to think like a security engineer, not just a tool operator.
 
 ---
 
-## 🛠️ Software & Tool Requirements
-
-### Core Tools (Required)
-
-| Tool | Purpose | Installation Method |
-|------|---------|---------------------|
-| **WSL2** | Linux environment on Windows | PowerShell: `wsl --install` |
-| **Docker Desktop** | Containerization + K8s | [Download for Windows](https://www.docker.com/products/docker-desktop) |
-| **Git** | Version control | [Git for Windows](https://git-scm.com/download/win) |
-| **Windows Terminal** | Modern terminal | Microsoft Store |
-| **VS Code** | Code editor | [Download](https://code.visualstudio.com/) |
-| **kubectl** | Kubernetes CLI | Included with Docker Desktop |
-| **Helm** | Kubernetes package manager | Chocolatey or manual install |
-
-### Security Scanning Tools
-
-| Tool | Purpose | Cost | Installation (WSL2) |
-|------|---------|------|---------------------|
-| **TruffleHog** | Secret detection | Free | `wget -qO trufflehog.tar.gz https://github.com/trufflesecurity/trufflehog/releases/latest/download/trufflehog_Linux_amd64.tar.gz && tar -xzf trufflehog.tar.gz && sudo mv trufflehog /usr/local/bin/` |
-| **Trivy** | Container vulnerability scanning | Free | `wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \| sudo apt-key add - && echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" \| sudo tee -a /etc/apt/sources.list.d/trivy.list && sudo apt update && sudo apt install trivy` |
-| **Semgrep** | SAST | Free tier | `python3 -m pip install semgrep` |
-| **Checkov** | IaC security scanning | Free | `pip3 install checkov` |
-| **Cosign** | Container image signing | Free | Download from GitHub releases |
-
-### Kubernetes Options (Choose One)
-
-| Option | Pros | Cons | Best For |
-|--------|------|------|----------|
-| **Docker Desktop K8s** | Built-in, easy setup | Basic features | Windows users (RECOMMENDED) |
-| **Minikube on WSL2** | Full K8s features | Requires WSL2 config | Advanced users |
-| **Kind (K8s in Docker)** | Fast, lightweight | Limited features | Testing |
-| **Google GKE** | Production-grade, free tier | Requires GCP account | Cloud deployment |
-| **Azure AKS** | Microsoft ecosystem | Requires Azure account | Windows integration |
-
-**Recommendation:** Start with **Docker Desktop Kubernetes** (easiest on Windows 11), then optionally move to **Azure AKS** (free tier) for cloud deployment.
-
-### Optional Tools (Recommended)
-
-- **PowerShell 7** - Modern PowerShell (`winget install Microsoft.PowerShell`)
-- **Windows Subsystem for Linux 2 (Ubuntu)** - For native Linux tools
-- **k9s** - Terminal UI for Kubernetes (install in WSL2)
-- **Lens** - Kubernetes IDE with GUI ([Download](https://k8slens.dev/))
-- **Postman** - API testing
-- **Chocolatey** - Windows package manager (`Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))`)
-
----
-
-## 🏗️ Project Architecture
+## Project Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              Windows 11 Development Machine                  │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Docker Desktop + WSL2                    │   │
-│  │  ┌────────────────┐  ┌──────────────────────────┐   │   │
-│  │  │  Kubernetes    │  │   Security Tools (WSL2)  │   │   │
-│  │  │   Cluster      │  │   • TruffleHog           │   │   │
-│  │  │                │  │   • Trivy                │   │   │
-│  │  │  Production    │  │   • Semgrep              │   │   │
-│  │  │  Namespace     │  │   • Checkov              │   │   │
-│  │  └────────────────┘  └──────────────────────────┘   │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-                    git push to GitHub
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    GitHub Actions CI/CD                      │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │   Secret    │→ │     SAST     │→ │  Dependency      │   │
-│  │  Scanning   │  │  (Semgrep)   │  │  Scanning        │   │
-│  └─────────────┘  └──────────────┘  └──────────────────┘   │
-│                              ↓                               │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │   Docker    │→ │   Container  │→ │   Sign Image     │   │
-│  │    Build    │  │   Scanning   │  │   (Cosign)       │   │
-│  └─────────────┘  └──────────────┘  └──────────────────┘   │
-│                              ↓                               │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │   Policy    │→ │    Deploy    │→ │   Verify         │   │
-│  │    Check    │  │  to K8s      │  │   Deployment     │   │
-│  └─────────────┘  └──────────────┘  └──────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                        │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │  Network    │  │   Pod        │  │   Runtime        │   │
-│  │  Policies   │  │  Security    │  │   Security       │   │
-│  └─────────────┘  └──────────────┘  └──────────────────┘   │
-│                              ↓                               │
-│                    Your Website Running                      │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│              Windows 11 Development Machine                │
+│                                                            │
+│  VS Code (Remote WSL)  ←→  Kali Linux WSL2                │
+│                                  ↓                         │
+│                         Docker Desktop                     │
+│                         (Build + K8s)                      │
+└────────────────────────────────────────────────────────────┘
+                              ↓ git push
+┌────────────────────────────────────────────────────────────┐
+│                        GitHub                              │
+│                                                            │
+│  Repository → GitHub Actions → GHCR (image registry)      │
+│  Security Tab ← SARIF uploads from all scan tools         │
+└────────────────────────────────────────────────────────────┘
+                              ↓ kubectl apply
+┌────────────────────────────────────────────────────────────┐
+│           Kubernetes (Docker Desktop local)                │
+│                                                            │
+│  Namespace → Deployment → Service → NetworkPolicy         │
+│  OPA Gatekeeper (admission) + Falco (runtime)             │
+│  Prometheus + Grafana (observability)                      │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📅 Project Timeline
+## Progress Tracker
 
-| Week | Phase | Deliverables |
-|------|-------|--------------|
-| **Week 1** | Windows Setup + Foundation | WSL2, Docker, basic pipeline |
-| **Week 2** | Security Scanning | Secret detection, SAST, container scanning |
-| **Week 3** | Kubernetes Deployment | K8s cluster, secure deployments |
-| **Week 4** | Advanced Security | Policy enforcement, network policies |
-| **Week 5** | Monitoring & Observability | Dashboards, alerts, logging |
-| **Week 6** | Documentation & Portfolio | Write-up, diagrams, case study |
+| Phase | Step | Status |
+|---|---|---|
+| **Phase A** | A1: Environment setup | Done |
+| **Phase A** | A2: Containerise application | Done (basic Dockerfile) |
+| **Phase A** | A3: GitHub Actions basic pipeline | Partial — no build/push yet |
+| **Phase A** | A4: Docker build + push to GHCR | Not started |
+| **Phase A** | A5: Kubernetes manifests (basic, insecure) | Not started |
+| **Phase A** | A6: Deploy to K8s in pipeline | Not started |
+| **Phase B** | B1a: Gitleaks pre-commit hook | Done |
+| **Phase B** | B1b: TruffleHog CI workflow | Done |
+| **Phase B** | B1c: Minimum GitHub Actions permissions | Not started |
+| **Phase B** | B1d: OIDC (no long-lived credentials) | Not started |
+| **Phase B** | B2: Semgrep SAST + custom rules + SARIF | Done |
+| **Phase B** | B2: Branch protection rules | Not started |
+| **Phase B** | B3: Checkov IaC scanning | Not started |
+| **Phase B** | B4: Harden Dockerfile | Not started |
+| **Phase B** | B5: Trivy container scanning | Not started |
+| **Phase B** | B6: Cosign image signing | Not started |
+| **Phase B** | B7: Dependabot + SBOM | Not started |
+| **Phase B** | B8: K8s security contexts | Not started |
+| **Phase B** | B9: Network policies | Not started |
+| **Phase B** | B10: OPA Gatekeeper | Not started |
+| **Phase B** | B11: Falco runtime security | Not started |
+| **Phase B** | B11: Prometheus + Grafana | Not started |
+| **Phase B** | B12: Full pipeline gates enforced | Not started |
+| **Phase B** | B13: GitHub security settings + signed commits | Not started |
 
 ---
 
-## 🚀 Implementation Steps
+---
 
-<details>
-<summary><h3>Phase 0: Windows 11 Environment Setup (Week 1, Day 1)</h3></summary>
+## Phase A — Build the Working Pipeline
 
-#### Tasks
+> Goal: A `git push` triggers GitHub Actions, builds a Docker image, pushes it to a registry, and deploys it to Kubernetes. The app runs and is accessible in the browser. Nothing is hardened yet — that is intentional.
 
-- [ ] **Task 0.1: Enable WSL2**
-  ```powershell
-  # Open PowerShell as Administrator
-  
-  # Enable WSL
-  wsl --install
-  
-  # Restart computer when prompted
-  
-  # After restart, verify WSL2
-  wsl --list --verbose
-  
-  # Set WSL2 as default
-  wsl --set-default-version 2
-  
-  # Install Ubuntu (if not already installed)
-  wsl --install -d Ubuntu-22.04
-  ```
+---
 
-- [ ] **Task 0.2: Configure WSL2 Resource Limits**
-  
-  Create `C:\Users\YOUR_USERNAME\.wslconfig`:
+### A1 — Environment Setup
+
+**What and why:** WSL2 gives you a real Linux kernel on Windows. Kali Linux is chosen over Ubuntu because it ships with security tooling pre-installed and aligns with offensive and defensive security workflows. Docker Desktop uses the WSL2 backend — builds inside WSL2 are 10x faster than building on the Windows filesystem (`/mnt/c/`).
+
+**Tasks:**
+- WSL2 installed, Kali Linux distro configured
+- Create `C:\Users\YOUR_NAME\.wslconfig`:
   ```ini
   [wsl2]
-  memory=8GB    # Limit WSL2 to 8GB (half of your 16GB)
-  processors=4  # Use 4 CPU cores
-  swap=4GB      # Swap space
+  memory=8GB
+  processors=4
+  swap=4GB
   localhostForwarding=true
   ```
-  
-  Restart WSL:
-  ```powershell
-  wsl --shutdown
-  wsl
-  ```
-
-- [ ] **Task 0.3: Update Ubuntu in WSL2**
-  ```bash
-  # Inside WSL2 Ubuntu terminal
-  sudo apt update && sudo apt upgrade -y
-  
-  # Install essential tools
-  sudo apt install -y curl wget git build-essential python3 python3-pip
-  
-  # Verify
-  python3 --version
-  git --version
-  ```
-
-- [ ] **Task 0.4: Install Docker Desktop for Windows**
-  - Download from: https://www.docker.com/products/docker-desktop
-  - Install with default settings
-  - **IMPORTANT:** During installation:
-    - ✅ Enable WSL2 backend
-    - ✅ Enable Kubernetes
-  - Start Docker Desktop
-  - In Settings:
-    - General → ✅ Use WSL 2 based engine
-    - Resources → WSL Integration → ✅ Enable Ubuntu
-    - Kubernetes → ✅ Enable Kubernetes
-  
-  Verify:
-  ```powershell
-  # In PowerShell
-  docker --version
-  docker ps
-  
-  # In WSL2
-  docker --version
-  kubectl version --client
-  ```
-
-- [ ] **Task 0.5: Install Windows Terminal**
-  ```powershell
-  # Using winget
-  winget install Microsoft.WindowsTerminal
-  
-  # Or install from Microsoft Store
-  ```
-  
-  Configure Windows Terminal:
-  - Set Ubuntu (WSL) as default profile
-  - Configure color scheme and font
-  - Add keyboard shortcuts
-
-- [ ] **Task 0.6: Install Git for Windows**
-  ```powershell
-  # Using winget
-  winget install Git.Git
-  
-  # Or download from: https://git-scm.com/download/win
-  ```
-  
-  Configure Git:
-  ```bash
-  # In WSL2
-  git config --global user.name "Your Name"
-  git config --global user.email "your.email@example.com"
-  git config --global core.autocrlf input
-  ```
-
-- [ ] **Task 0.7: Install VS Code with WSL Extension**
-  ```powershell
-  # Install VS Code
-  winget install Microsoft.VisualStudioCode
-  ```
-  
-  Install extensions:
-  - WSL (ms-vscode-remote.remote-wsl)
-  - Docker (ms-azuretools.vscode-docker)
-  - Kubernetes (ms-kubernetes-tools.vscode-kubernetes-tools)
-  - YAML (redhat.vscode-yaml)
-  
-  Open WSL from VS Code:
-  ```bash
-  # In WSL2 terminal
-  code .
-  ```
-
-- [ ] **Task 0.8: Install Chocolatey (Optional)**
-  ```powershell
-  # In PowerShell as Administrator
-  Set-ExecutionPolicy Bypass -Scope Process -Force
-  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-  iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-  
-  # Verify
-  choco --version
-  ```
-
-- [ ] **Task 0.9: Install Helm**
-  
-  **Option A: Using Chocolatey (Windows)**
-  ```powershell
-  choco install kubernetes-helm
-  ```
-  
-  **Option B: In WSL2**
-  ```bash
-  curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  
-  # Verify
-  helm version
-  ```
-
-- [ ] **Task 0.10: Configure Docker Desktop Performance**
-  
-  Docker Desktop Settings:
-  - Resources → Advanced:
-    - CPUs: 4
-    - Memory: 8 GB
-    - Swap: 2 GB
-    - Disk image size: 100 GB
-  - Apply & Restart
-
-- [ ] **Task 0.11: Test Environment**
-  ```bash
-  # In WSL2, create test directory
-  mkdir -p ~/projects/cicd-pipeline
-  cd ~/projects/cicd-pipeline
-  
-  # Test Docker
-  docker run hello-world
-  
-  # Test Kubernetes
-  kubectl cluster-info
-  kubectl get nodes
-  
-  # Test access from Windows
-  # Open PowerShell and navigate to WSL directory
-  cd \\wsl$\Ubuntu-22.04\home\YOUR_USERNAME\projects\cicd-pipeline
-  ```
-
-#### Deliverables
-- ✅ WSL2 installed and configured
-- ✅ Docker Desktop running with K8s enabled
-- ✅ Git configured
-- ✅ VS Code with WSL integration
-- ✅ All tools accessible from both Windows and WSL2
-
-#### Windows-Specific Notes
-- **File System:** Work inside WSL2 filesystem (`~/projects/`) for best performance
-- **Accessing Files:** Windows can access WSL2 files via `\\wsl$\Ubuntu-22.04\`
-- **Docker:** Use Docker Desktop, not Docker inside WSL2
-- **Port Forwarding:** Automatic between WSL2 and Windows
-- **Clipboard:** Copy/paste works between Windows and WSL2
-
-#### Troubleshooting
-
-**WSL2 Not Starting:**
-```powershell
-# Enable required features
-dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
-dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-
-# Restart computer
-```
-
-**Docker Desktop Not Starting:**
-- Ensure virtualization is enabled in BIOS
-- Check Windows Features: Hyper-V, Virtual Machine Platform, WSL
-- Restart Docker Desktop
-
-**Performance Issues:**
-- Check `.wslconfig` memory allocation
-- Don't mix WSL1 and WSL2 distributions
-- Keep project files inside WSL2, not Windows filesystem
-
-</details>
-
-<details>
-<summary><h3>Phase 1: Project Setup & Prerequisites (Week 1, Day 2-3)</h3></summary>
-
-#### Tasks
-
-- [ ] **Task 1.1: Set Up Project Directory Structure**
-  ```bash
-  # In WSL2
-  cd ~/projects
-  mkdir cicd-pipeline
-  cd cicd-pipeline
-  
-  # Create directory structure
-  mkdir -p .github/workflows
-  mkdir -p k8s/{base,overlays/production,overlays/staging}
-  mkdir -p docker
-  mkdir -p docs
-  mkdir -p scripts
-  
-  # Create .gitignore
-  cat > .gitignore << 'EOF'
-  # Secrets
-  cosign.key
-  *.pem
-  *.key
-  .env
-  
-  # IDE
-  .vscode/
-  .idea/
-  
-  # OS
-  .DS_Store
-  Thumbs.db
-  
-  # Dependencies
-  node_modules/
-  __pycache__/
-  
-  # Build
-  dist/
-  build/
-  *.log
-  EOF
-  ```
-
-- [ ] **Task 1.2: Initialize Git Repository**
-  ```bash
-  # Initialize repo
-  git init
-  
-  # Create README
-  cat > README.md << 'EOF'
-  # Secure CI/CD Pipeline
-  
-  Production-grade secure CI/CD pipeline with automated security scanning.
-  
-  ## Tech Stack
-  - Platform: Windows 11 + WSL2
-  - Containers: Docker Desktop
-  - Orchestration: Kubernetes
-  - CI/CD: GitHub Actions
-  - Monitoring: Prometheus + Grafana
-  EOF
-  
-  # Initial commit
-  git add .
-  git commit -m "Initial commit: Project structure"
-  ```
-
-- [ ] **Task 1.3: Create GitHub Repository**
-  ```bash
-  # On GitHub.com:
-  # 1. Create new repository
-  # 2. Name: cicd-pipeline
-  # 3. Public or Private (your choice)
-  # 4. Don't initialize with README (we already have one)
-  
-  # Link local repo to GitHub
-  git remote add origin https://github.com/YOUR_USERNAME/cicd-pipeline.git
-  git branch -M main
-  git push -u origin main
-  ```
-
-- [ ] **Task 1.4: Prepare Website for Containerization**
-  
-  **If you have an existing website:**
-  ```bash
-  # Copy your website files to project directory
-  # Example structure:
-  # ~/projects/cicd-pipeline/
-  #   ├── index.html
-  #   ├── css/
-  #   ├── js/
-  #   └── assets/
-  ```
-  
-  **If starting fresh (static site example):**
-  ```bash
-  # Create simple HTML website
-  cat > index.html << 'EOF'
-  <!DOCTYPE html>
-  <html lang="en">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Secure CI/CD Pipeline Demo</title>
-      <style>
-          body {
-              font-family: Arial, sans-serif;
-              max-width: 800px;
-              margin: 50px auto;
-              padding: 20px;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              color: white;
-          }
-          .container {
-              background: rgba(255,255,255,0.1);
-              padding: 30px;
-              border-radius: 10px;
-              backdrop-filter: blur(10px);
-          }
-          h1 { font-size: 2.5em; margin-bottom: 20px; }
-          .badge {
-              display: inline-block;
-              padding: 5px 15px;
-              background: rgba(255,255,255,0.2);
-              border-radius: 20px;
-              margin: 5px;
-          }
-      </style>
-  </head>
-  <body>
-      <div class="container">
-          <h1>🔐 Secure CI/CD Pipeline</h1>
-          <p>This website is deployed through a production-grade secure CI/CD pipeline.</p>
-          <h2>Security Features:</h2>
-          <div class="badge">Secret Detection</div>
-          <div class="badge">SAST Scanning</div>
-          <div class="badge">Container Scanning</div>
-          <div class="badge">Image Signing</div>
-          <div class="badge">Policy Enforcement</div>
-          <div class="badge">Network Policies</div>
-          <p><strong>Build:</strong> <span id="build"><!-- Injected via CI/CD --></span></p>
-          <p><strong>Deployed:</strong> <span id="timestamp"></span></p>
-      </div>
-      <script>
-          document.getElementById('timestamp').textContent = new Date().toLocaleString();
-      </script>
-  </body>
-  </html>
-  EOF
-  ```
-
-- [ ] **Task 1.5: Create Secure Dockerfile**
-  
-  Create `docker/Dockerfile`:
-  ```dockerfile
-  # Multi-stage build for security and size optimization
-  FROM nginx:1.25-alpine as base
-  
-  # Security: Update packages
-  RUN apk update && \
-      apk upgrade && \
-      apk add --no-cache ca-certificates && \
-      rm -rf /var/cache/apk/*
-  
-  # Security: Create non-root user
-  RUN addgroup -g 101 -S nginx && \
-      adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx
-  
-  # Copy nginx configuration
-  COPY docker/nginx.conf /etc/nginx/nginx.conf
-  
-  # Copy website files
-  COPY index.html /usr/share/nginx/html/
-  COPY css /usr/share/nginx/html/css
-  COPY js /usr/share/nginx/html/js
-  COPY assets /usr/share/nginx/html/assets
-  
-  # Security: Set ownership
-  RUN chown -R nginx:nginx /usr/share/nginx/html && \
-      chown -R nginx:nginx /var/cache/nginx && \
-      chown -R nginx:nginx /var/log/nginx && \
-      chown -R nginx:nginx /etc/nginx/conf.d && \
-      touch /var/run/nginx.pid && \
-      chown -R nginx:nginx /var/run/nginx.pid && \
-      chmod -R 755 /usr/share/nginx/html
-  
-  # Security: Switch to non-root user
-  USER nginx
-  
-  # Expose non-privileged port
-  EXPOSE 8080
-  
-  # Health check
-  HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
-  
-  # Start nginx
-  CMD ["nginx", "-g", "daemon off;"]
-  ```
-
-- [ ] **Task 1.6: Create nginx Configuration**
-  
-  Create `docker/nginx.conf`:
-  ```nginx
-  user nginx;
-  worker_processes auto;
-  pid /var/run/nginx.pid;
-  error_log /var/log/nginx/error.log warn;
-  
-  events {
-      worker_connections 1024;
-  }
-  
-  http {
-      include /etc/nginx/mime.types;
-      default_type application/octet-stream;
-      
-      log_format main '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent"';
-      
-      access_log /var/log/nginx/access.log main;
-      
-      sendfile on;
-      tcp_nopush on;
-      tcp_nodelay on;
-      keepalive_timeout 65;
-      types_hash_max_size 2048;
-      
-      # Security headers
-      add_header X-Frame-Options "SAMEORIGIN" always;
-      add_header X-Content-Type-Options "nosniff" always;
-      add_header X-XSS-Protection "1; mode=block" always;
-      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-      
-      # Gzip compression
-      gzip on;
-      gzip_vary on;
-      gzip_proxied any;
-      gzip_comp_level 6;
-      gzip_types text/plain text/css text/xml text/javascript application/json application/javascript application/xml+rss;
-      
-      server {
-          listen 8080;
-          server_name _;
-          
-          root /usr/share/nginx/html;
-          index index.html;
-          
-          # Disable server tokens
-          server_tokens off;
-          
-          location / {
-              try_files $uri $uri/ /index.html;
-          }
-          
-          # Deny access to hidden files
-          location ~ /\. {
-              deny all;
-              access_log off;
-              log_not_found off;
-          }
-          
-          # Cache static assets
-          location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
-              expires 1y;
-              add_header Cache-Control "public, immutable";
-          }
-      }
-  }
-  ```
-
-- [ ] **Task 1.7: Create .dockerignore**
-  
-  Create `.dockerignore`:
-  ```
-  # Version control
-  .git
-  .gitignore
-  .github
-  
-  # Documentation
-  README.md
-  docs/
-  *.md
-  
-  # Kubernetes
-  k8s/
-  
-  # CI/CD
-  .github/
-  
-  # IDE
-  .vscode/
-  .idea/
-  
-  # OS
-  .DS_Store
-  Thumbs.db
-  
-  # Secrets
-  *.key
-  *.pem
-  .env
-  
-  # Dependencies (if using Node.js build step)
-  node_modules/
-  npm-debug.log
-  
-  # Build artifacts
-  dist/
-  build/
-  ```
-
-- [ ] **Task 1.8: Build and Test Docker Image Locally**
-  ```bash
-  # Build image
-  docker build -t cicd-pipeline:local -f docker/Dockerfile .
-  
-  # Check image size
-  docker images cicd-pipeline:local
-  
-  # Run container
-  docker run -d -p 8080:8080 --name test-website cicd-pipeline:local
-  
-  # Test in browser
-  # From Windows, open: http://localhost:8080
-  
-  # Check logs
-  docker logs test-website
-  
-  # Test health check
-  docker inspect test-website | grep -A 10 Health
-  
-  # Clean up
-  docker stop test-website
-  docker rm test-website
-  ```
-
-- [ ] **Task 1.9: Verify Docker Image Security**
-  ```bash
-  # Check that container runs as non-root
-  docker run --rm cicd-pipeline:local id
-  # Expected: uid=101(nginx) gid=101(nginx)
-  
-  # Verify no root processes
-  docker run --rm cicd-pipeline:local ps aux
-  # Should show nginx user, not root
-  ```
-
-- [ ] **Task 1.10: Create Initial Documentation**
-  
-  Create `docs/SETUP.md`:
-  ```markdown
-  # Development Setup
-  
-  ## Environment
-  - **OS:** Windows 11
-  - **WSL:** Ubuntu 22.04
-  - **Docker:** Docker Desktop with WSL2 backend
-  - **Kubernetes:** Docker Desktop K8s
-  
-  ## Prerequisites
-  - 16GB RAM (8GB allocated to WSL2)
-  - Docker Desktop installed
-  - WSL2 enabled
-  - Git installed
-  
-  ## Local Development
-  
-  ### Build Docker Image
-  \```bash
-  docker build -t cicd-pipeline:local -f docker/Dockerfile .
-  \```
-  
-  ### Run Locally
-  \```bash
-  docker run -d -p 8080:8080 cicd-pipeline:local
-  \```
-  
-  ### Access Website
-  Open http://localhost:8080 in browser
-  
-  ## File Locations
-  - **Project Root:** `~/projects/cicd-pipeline` (WSL2)
-  - **Windows Access:** `\\wsl$\Ubuntu-22.04\home\YOUR_USERNAME\projects\cicd-pipeline`
-  - **Docker Context:** WSL2 filesystem
-  
-  ## Common Commands
-  \```bash
-  # Build
-  docker build -t cicd-pipeline:test .
-  
-  # Run
-  docker run -d -p 8080:8080 cicd-pipeline:test
-  
-  # Logs
-  docker logs -f CONTAINER_ID
-  
-  # Stop
-  docker stop CONTAINER_ID
-  \```
-  ```
-
-#### Deliverables
-- ✅ Project directory structure created
-- ✅ Git repository initialized and pushed to GitHub
-- ✅ Dockerfile created with security best practices
-- ✅ nginx configuration for non-root user
-- ✅ Docker image builds successfully
-- ✅ Website accessible on port 8080
-- ✅ Documentation started
-
-#### Success Criteria
-- Docker image builds without errors
-- Container runs as non-root user (nginx, UID 101)
-- Website loads in browser at localhost:8080
-- Health check passes
-- Image size optimized (<50MB for static site)
-
-#### Windows-Specific Tips
-- **Build Performance:** Build inside WSL2 filesystem, not Windows filesystem
-- **Port Access:** Windows can access localhost:8080 directly
-- **File Editing:** Use VS Code with WSL extension for best performance
-- **Docker Context:** Ensure Docker Desktop is using WSL2 backend
-
-</details>
-
-<details>
-<summary><h3>Phase 2: Secret Detection Implementation (Week 1, Day 4-5)</h3></summary>
-
-#### Tasks
-
-- [ ] **Task 2.1: Install TruffleHog in WSL2**
-  ```bash
-  # In WSL2
-  cd ~/projects/cicd-pipeline
-  
-  # Download TruffleHog
-  wget https://github.com/trufflesecurity/trufflehog/releases/download/v3.63.0/trufflehog_3.63.0_linux_amd64.tar.gz
-  
-  # Extract
-  tar -xzf trufflehog_3.63.0_linux_amd64.tar.gz
-  
-  # Move to PATH
-  sudo mv trufflehog /usr/local/bin/
-  
-  # Clean up
-  rm trufflehog_3.63.0_linux_amd64.tar.gz
-  
-  # Verify
-  trufflehog --version
-  ```
-
-- [ ] **Task 2.2: Install git-secrets (Optional Additional Layer)**
-  ```bash
-  # Clone git-secrets
-  cd ~/
-  git clone https://github.com/awslabs/git-secrets.git
-  cd git-secrets
-  sudo make install
-  
-  # Return to project
-  cd ~/projects/cicd-pipeline
-  
-  # Initialize git-secrets for this repo
-  git secrets --install
-  git secrets --register-aws
-  ```
-
-- [ ] **Task 2.3: Create Pre-commit Hook**
-  ```bash
-  # Create pre-commit hook
-  cat > .git/hooks/pre-commit << 'EOF'
-  #!/bin/bash
-  
-  echo "🔍 Running secret detection..."
-  
-  # Get list of staged files
-  STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
-  
-  if [ -z "$STAGED_FILES" ]; then
-    echo "✅ No files to scan"
-    exit 0
-  fi
-  
-  # Run TruffleHog on staged files
-  echo "$STAGED_FILES" | xargs trufflehog filesystem --no-update --fail
-  
-  if [ $? -ne 0 ]; then
-      echo "❌ Secret detected! Commit blocked."
-      echo "Remove secrets before committing."
-      echo "If this is a false positive, add to .trufflehogignore"
-      exit 1
-  fi
-  
-  echo "✅ No secrets detected"
-  exit 0
-  EOF
-  
-  # Make executable
-  chmod +x .git/hooks/pre-commit
-  ```
-
-- [ ] **Task 2.4: Create .trufflehogignore File**
-  
-  Create `.trufflehogignore`:
-  ```
-  # Ignore test files
-  **/test/**
-  **/*test*.txt
-  **/*test*.json
-  
-  # Ignore documentation
-  docs/**
-  *.md
-  README.md
-  
-  # Ignore package lock files (high false positive rate)
-  package-lock.json
-  yarn.lock
-  Gemfile.lock
-  poetry.lock
-  
-  # Ignore build artifacts
-  dist/**
-  build/**
-  
-  # Ignore known false positives
-  # Add specific file paths here if needed
-  ```
-
-- [ ] **Task 2.5: Test Secret Detection Locally**
-  ```bash
-  # Create test file with fake AWS key
-  echo "aws_access_key_id=AKIAIOSFODNN7EXAMPLE" > test-secret.txt
-  
-  # Try to commit (should be blocked)
-  git add test-secret.txt
-  git commit -m "test: secret detection"
-  # Expected: ❌ Secret detected! Commit blocked.
-  
-  # Remove test file
-  git reset HEAD test-secret.txt
-  rm test-secret.txt
-  
-  # Test with real files (should pass)
-  git add docker/Dockerfile
-  git commit -m "test: dockerfile"
-  # Expected: ✅ No secrets detected
-  ```
-
-- [ ] **Task 2.6: Create GitHub Actions Secret Scanning Workflow**
-  
-  Create `.github/workflows/security-secrets.yml`:
-  ```yaml
-  name: Secret Detection
-  
-  on:
-    push:
-      branches: [ main, develop, feature/* ]
-    pull_request:
-      branches: [ main ]
-  
-  jobs:
-    trufflehog:
-      name: TruffleHog Secret Scanning
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 0  # Full history for comprehensive scan
-        
-        - name: TruffleHog OSS
-          uses: trufflesecurity/trufflehog@main
-          with:
-            path: ./
-            base: ${{ github.event.repository.default_branch }}
-            head: HEAD
-            extra_args: --debug --only-verified
-        
-        - name: Upload Results (on failure)
-          if: failure()
-          uses: actions/upload-artifact@v3
-          with:
-            name: trufflehog-results
-            path: trufflehog-results.json
-            retention-days: 30
-  ```
-
-- [ ] **Task 2.7: Enable GitHub Native Secret Scanning**
-  
-  On GitHub repository:
-  1. Go to Settings → Security → Code security and analysis
-  2. Enable:
-     - ✅ Dependency graph
-     - ✅ Dependabot alerts
-     - ✅ Dependabot security updates
-     - ✅ Secret scanning
-     - ✅ Push protection (prevents commits with secrets)
-  
-  Note: Some features require public repo or GitHub Advanced Security
-
-- [ ] **Task 2.8: Create Secret Management Documentation**
-  
-  Create `docs/SECURITY.md`:
-  ```markdown
-  # Security Policy
-  
-  ## Secret Detection
-  
-  This project implements multiple layers of secret detection:
-  
-  ### 1. Pre-commit Hooks (Local)
-  - **Tool:** TruffleHog
-  - **Scope:** Staged files
-  - **Action:** Blocks commit if secret detected
-  
-  ### 2. CI/CD Pipeline (GitHub Actions)
-  - **Tool:** TruffleHog GitHub Action
-  - **Scope:** Full repository history
-  - **Action:** Fails build if secret detected
-  
-  ### 3. GitHub Secret Scanning (Native)
-  - **Tool:** GitHub Advanced Security
-  - **Scope:** All pushes to repository
-  - **Action:** Alerts and prevents push (if push protection enabled)
-  
-  ## How to Handle Detected Secrets
-  
-  ### If Secret is Real
-  1. **DO NOT** commit the secret
-  2. Remove from file
-  3. Rotate/invalidate the compromised credential
-  4. Use environment variables or secret management tools
-  5. Add `.env` to `.gitignore`
-  
-  ### If False Positive
-  1. Add file/pattern to `.trufflehogignore`
-  2. Document why it's a false positive
-  3. Re-run scan to verify
-  
-  ## Secret Management Best Practices
-  
-  ### Local Development
-  - Use `.env` files (never commit these)
-  - Use environment variables
-  - Use secure credential storage (e.g., Windows Credential Manager, pass)
-  
-  ### CI/CD
-  - Use GitHub Secrets for pipeline
-  - Never log secrets
-  - Rotate secrets regularly
-  
-  ### Kubernetes
-  - Use Kubernetes Secrets
-  - Consider External Secrets Operator
-  - Never commit secrets to Git
-  
-  ## Allowed Patterns
-  
-  The following are NOT considered secrets:
-  - Example credentials in documentation (clearly marked as examples)
-  - Public test keys (with "test" or "example" in name)
-  - Placeholder values (e.g., "YOUR_API_KEY_HERE")
-  
-  ## Reporting Security Issues
-  
-  If you discover a security vulnerability:
-  1. **DO NOT** open a public issue
-  2. Email: security@your-domain.com
-  3. Include: Description, reproduction steps, impact
-  4. We'll respond within 48 hours
-  ```
-
-- [ ] **Task 2.9: Test GitHub Actions Workflow**
-  ```bash
-  # Commit workflow
-  git add .github/workflows/security-secrets.yml
-  git add .trufflehogignore
-  git commit -m "feat: add secret detection workflow"
-  git push origin main
-  
-  # Check GitHub Actions tab
-  # Navigate to: https://github.com/YOUR_USERNAME/cicd-pipeline/actions
-  # Verify "Secret Detection" workflow runs and passes
-  ```
-
-- [ ] **Task 2.10: Create Secret Detection Verification Script**
-  
-  Create `scripts/scan-secrets.sh`:
-  ```bash
-  #!/bin/bash
-  
-  echo "🔍 Running comprehensive secret scan..."
-  
-  # Scan entire repository
-  trufflehog filesystem . \
-    --no-update \
-    --json \
-    --output=secret-scan-results.json
-  
-  if [ $? -eq 0 ]; then
-    echo "✅ No secrets detected"
-    rm -f secret-scan-results.json
-    exit 0
-  else
-    echo "❌ Secrets detected! See secret-scan-results.json"
-    cat secret-scan-results.json
-    exit 1
-  fi
-  ```
-  
-  Make executable:
-  ```bash
-  chmod +x scripts/scan-secrets.sh
-  
-  # Test
-  ./scripts/scan-secrets.sh
-  ```
-
-#### Deliverables
-- ✅ TruffleHog installed locally
-- ✅ Pre-commit hook blocks secrets
-- ✅ GitHub Actions workflow for secret scanning
-- ✅ GitHub native secret scanning enabled
-- ✅ .trufflehogignore configured
-- ✅ Security documentation created
-
-#### Success Criteria
-- Pre-commit hook blocks test secrets
-- GitHub Actions workflow passes
-- No secrets in repository
-- False positives handled via .trufflehogignore
-
-#### Windows-Specific Notes
-- **Pre-commit hooks:** Work in WSL2 Git, may not work with Git for Windows
-- **Recommendation:** Always commit from WSL2 terminal
-- **Path handling:** Use WSL2 paths in hooks, not Windows paths
-- **Line endings:** Ensure LF (not CRLF) for shell scripts: `git config core.autocrlf input`
-
-</details>
-
-<details>
-<summary><h3>Phase 3: Static Application Security Testing (Week 2, Day 1-2)</h3></summary>
-
-#### Tasks
-
-- [ ] **Task 3.1: Install Semgrep in WSL2**
-  ```bash
-  # Install Python pip if not already installed
-  sudo apt install python3-pip -y
-  
-  # Install Semgrep
-  pip3 install semgrep
-  
-  # Add to PATH (add to ~/.bashrc for persistence)
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-  source ~/.bashrc
-  
-  # Verify
-  semgrep --version
-  ```
-
-- [ ] **Task 3.2: Install Checkov for IaC Scanning**
-  ```bash
-  # Install Checkov
-  pip3 install checkov
-  
-  # Verify
-  checkov --version
-  ```
-
-- [ ] **Task 3.3: Run Initial SAST Scan**
-  ```bash
-  # Scan with Semgrep (uses community rules)
-  semgrep --config=auto --metrics=off .
-  
-  # Save results
-  semgrep --config=auto --json --output=semgrep-results.json .
-  
-  # Scan Dockerfile
-  checkov -f docker/Dockerfile
-  
-  # Scan Kubernetes manifests (will create later)
-  # checkov -d k8s/
-  ```
-
-- [ ] **Task 3.4: Create Custom Semgrep Rules**
-  
-  Create `.semgrep/rules.yml`:
-  ```yaml
-  rules:
-    # Hardcoded secrets
-    - id: hardcoded-password
-      patterns:
-        - pattern: password = "..."
-        - pattern: PASSWORD = "..."
-        - pattern-not: password = ""
-      message: Potential hardcoded password detected
-      severity: ERROR
-      languages: [javascript, python, go, java]
-      metadata:
-        category: security
-        cwe: "CWE-798: Use of Hard-coded Credentials"
-    
-    - id: hardcoded-api-key
-      patterns:
-        - pattern: api_key = "..."
-        - pattern: API_KEY = "..."
-        - pattern-not: api_key = ""
-      message: Potential hardcoded API key detected
-      severity: ERROR
-      languages: [javascript, python, go, java]
-    
-    # SQL Injection
-    - id: sql-injection-risk
-      patterns:
-        - pattern: |
-            $DB.execute($SQL + ...)
-        - pattern: |
-            $DB.query($SQL + ...)
-      message: Possible SQL injection vulnerability - use parameterized queries
-      severity: WARNING
-      languages: [python, javascript]
-      metadata:
-        category: security
-        cwe: "CWE-89: SQL Injection"
-    
-    # XSS vulnerabilities
-    - id: dom-xss
-      patterns:
-        - pattern: $EL.innerHTML = $INPUT
-        - pattern: document.write($INPUT)
-      message: Potential XSS vulnerability - avoid innerHTML with user input
-      severity: WARNING
-      languages: [javascript]
-      metadata:
-        category: security
-        cwe: "CWE-79: Cross-site Scripting"
-    
-    # Unsafe eval
-    - id: eval-usage
-      pattern: eval($X)
-      message: Use of eval() is dangerous and should be avoided
-      severity: ERROR
-      languages: [javascript, python]
-    
-    # Insecure random
-    - id: weak-random
-      patterns:
-        - pattern: Math.random()
-        - pattern: random.random()
-      message: Cryptographically weak random number generator - use crypto.randomBytes() or secrets module
-      severity: WARNING
-      languages: [javascript, python]
-      metadata:
-        category: security
-        cwe: "CWE-338: Use of Cryptographically Weak PRNG"
-  ```
-
-- [ ] **Task 3.5: Test Custom Rules**
-  ```bash
-  # Run with custom rules
-  semgrep --config=.semgrep/rules.yml .
-  
-  # Run both custom and community rules
-  semgrep --config=auto --config=.semgrep/rules.yml .
-  ```
-
-- [ ] **Task 3.6: Create SAST GitHub Workflow**
-  
-  Create `.github/workflows/security-sast.yml`:
-  ```yaml
-  name: SAST Scanning
-  
-  on:
-    push:
-      branches: [ main, develop ]
-    pull_request:
-      branches: [ main ]
-    schedule:
-      - cron: '0 0 * * 0'  # Weekly Sunday midnight
-  
-  jobs:
-    semgrep:
-      name: Semgrep SAST
-      runs-on: ubuntu-latest
-      container:
-        image: returntocorp/semgrep
-      
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-        
-        - name: Run Semgrep
-          run: |
-            semgrep scan \
-              --config=auto \
-              --config=.semgrep/rules.yml \
-              --sarif \
-              --output=semgrep.sarif \
-              --metrics=off \
-              --verbose
-        
-        - name: Upload SARIF to GitHub Security
-          uses: github/codeql-action/upload-sarif@v3
-          with:
-            sarif_file: semgrep.sarif
-          if: always()
-        
-        - name: Upload Semgrep Results
-          uses: actions/upload-artifact@v3
-          with:
-            name: semgrep-results
-            path: semgrep.sarif
-          if: always()
-    
-    checkov:
-      name: Checkov IaC Security Scan
-      runs-on: ubuntu-latest
-      
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-        
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: '3.11'
-        
-        - name: Install Checkov
-          run: pip install checkov
-        
-        - name: Run Checkov on Dockerfile
-          run: |
-            checkov -f docker/Dockerfile \
-              --output sarif \
-              --output-file-path checkov-docker.sarif \
-              --quiet
-        
-        - name: Run Checkov on Kubernetes
-          run: |
-            checkov -d k8s/ \
-              --framework kubernetes \
-              --output sarif \
-              --output-file-path checkov-k8s.sarif \
-              --quiet
-          continue-on-error: true  # k8s folder might not exist yet
-        
-        - name: Upload Checkov Results
-          uses: github/codeql-action/upload-sarif@v3
-          with:
-            sarif_file: |
-              checkov-docker.sarif
-              checkov-k8s.sarif
-          if: always()
-  ```
-
-- [ ] **Task 3.7: Configure SARIF Viewer in GitHub**
-  
-  After pushing workflow:
-  1. Navigate to GitHub repository
-  2. Go to Security → Code scanning
-  3. View SARIF results from Semgrep and Checkov
-  4. Results will appear as alerts with severity levels
-
-- [ ] **Task 3.8: Create SAST Quality Gates**
-  
-  Update `.github/workflows/security-sast.yml` to add quality gate:
-  ```yaml
-  # Add this job after semgrep job
-    
-    quality-gate:
-      name: SAST Quality Gate
-      needs: [semgrep, checkov]
-      runs-on: ubuntu-latest
-      
-      steps:
-        - name: Download Semgrep Results
-          uses: actions/download-artifact@v3
-          with:
-            name: semgrep-results
-        
-        - name: Check for Critical Issues
-          run: |
-            # Count ERROR severity issues
-            ERROR_COUNT=$(jq '[.runs[].results[] | select(.level=="error")] | length' semgrep.sarif)
-            
-            echo "Found $ERROR_COUNT critical issues"
-            
-            if [ "$ERROR_COUNT" -gt 0 ]; then
-              echo "❌ SAST Quality Gate Failed: $ERROR_COUNT critical issues found"
-              exit 1
-            fi
-            
-            echo "✅ SAST Quality Gate Passed"
-  ```
-
-- [ ] **Task 3.9: Create Local SAST Scan Script**
-  
-  Create `scripts/scan-sast.sh`:
-  ```bash
-  #!/bin/bash
-  
-  echo "🔍 Running SAST scans..."
-  
-  # Run Semgrep
-  echo ""
-  echo "Running Semgrep..."
-  semgrep --config=auto --config=.semgrep/rules.yml . --metrics=off
-  SEMGREP_EXIT=$?
-  
-  # Run Checkov on Dockerfile
-  echo ""
-  echo "Running Checkov on Dockerfile..."
-  checkov -f docker/Dockerfile --compact --quiet
-  CHECKOV_EXIT=$?
-  
-  # Run Checkov on Kubernetes (if exists)
-  if [ -d "k8s" ]; then
-    echo ""
-    echo "Running Checkov on Kubernetes manifests..."
-    checkov -d k8s/ --framework kubernetes --compact --quiet
-  fi
-  
-  # Summary
-  echo ""
-  echo "======================================"
-  echo "SAST Scan Summary"
-  echo "======================================"
-  
-  if [ $SEMGREP_EXIT -eq 0 ] && [ $CHECKOV_EXIT -eq 0 ]; then
-    echo "✅ All SAST scans passed"
-    exit 0
-  else
-    echo "❌ SAST scans found issues"
-    exit 1
-  fi
-  ```
-  
-  Make executable:
-  ```bash
-  chmod +x scripts/scan-sast.sh
-  
-  # Test
-  ./scripts/scan-sast.sh
-  ```
-
-- [ ] **Task 3.10: Document SAST Process**
-  
-  Add to `docs/SECURITY.md`:
-  ```markdown
-  ## SAST (Static Application Security Testing)
-  
-  ### Tools
-  - **Semgrep**: General-purpose SAST for code
-  - **Checkov**: Infrastructure as Code (IaC) security
-  
-  ### Scan Coverage
-  
-  #### Semgrep
-  - JavaScript/TypeScript: XSS, injection, crypto issues
-  - Python: SQL injection, command injection, crypto
-  - Dockerfile: Best practices (via Checkov)
-  - Custom rules: Hardcoded secrets, weak random, unsafe eval
-  
-  #### Checkov
-  - Dockerfile: Security best practices, rootless containers
-  - Kubernetes: CIS benchmarks, Pod Security Standards
-  - GitHub Actions: Workflow security
-  
-  ### Running Locally
-  \```bash
-  # Quick scan
-  semgrep --config=auto .
-  
-  # With custom rules
-  semgrep --config=auto --config=.semgrep/rules.yml .
-  
-  # Scan Dockerfile
-  checkov -f docker/Dockerfile
-  
-  # Comprehensive scan
-  ./scripts/scan-sast.sh
-  \```
-  
-  ### CI/CD Integration
-  - Runs on every push to main/develop
-  - Runs on all pull requests
-  - Weekly scheduled scans
-  - Results uploaded to GitHub Security tab
-  
-  ### Quality Gates
-  - **ERROR severity** → Pipeline fails
-  - **WARNING severity** → Alert but allow
-  - Zero tolerance for critical issues
-  
-  ### False Positives
-  If Semgrep flags false positives:
-  1. Add inline comment: `# nosemgrep: rule-id`
-  2. Document why it's safe
-  3. Consider refactoring if possible
-  ```
-
-#### Deliverables
-- ✅ Semgrep installed and configured
-- ✅ Checkov installed for IaC scanning
-- ✅ Custom Semgrep rules created
-- ✅ GitHub Actions SAST workflow
-- ✅ Quality gates enforced
-- ✅ Local scan script
-
-#### Success Criteria
-- SAST scans run successfully
-- Results appear in GitHub Security tab
-- Custom rules detect security issues
-- Quality gates block critical issues
-- Documentation complete
-
-#### Windows-Specific Notes
-- **Python PATH:** Ensure `~/.local/bin` in PATH (WSL2)
-- **Performance:** SAST scans faster in WSL2 than Windows filesystem
-- **Semgrep Cache:** Located at `~/.semgrep` (WSL2)
-- **Editor Integration:** VS Code can show Semgrep results inline
-
-</details>
-
----
-
-## 🎓 Windows-Specific Best Practices
-
-### File System Performance
-- **Always work in WSL2 filesystem** (`~/projects/`) not Windows filesystem (`/mnt/c/`)
-- Docker builds are 10x faster in WSL2
-- Git operations are significantly faster
-
-### Path Handling
+- Docker Desktop: WSL2 backend enabled, Kubernetes enabled
+- VS Code with Remote-WSL extension installed
+- Git configured in WSL2, SSH auth to GitHub configured
+
+**Verify:**
 ```bash
-# Good (WSL2 path)
-cd ~/projects/cicd-pipeline
-
-# Avoid (Windows path via /mnt/c/)
-cd /mnt/c/Users/YourName/projects/cicd-pipeline
+docker run hello-world
+kubectl cluster-info
+git --version
 ```
 
-### Accessing Files from Windows
-```
-# From Windows Explorer
-\\wsl$\Ubuntu-22.04\home\YOUR_USERNAME\projects\cicd-pipeline
+---
 
-# From PowerShell
-cd \\wsl$\Ubuntu-22.04\home\YOUR_USERNAME\projects
-```
+### A2 — Containerise the Application
 
-### Resource Management
-```ini
-# Optimize .wslconfig for 16GB RAM system
-[wsl2]
-memory=8GB       # 50% of total RAM
-processors=4     # Leave some for Windows
-swap=4GB
-localhostForwarding=true
+**What and why:** The quiz-site is a static HTML/JS app. We containerise it so it runs identically everywhere — local machine, CI pipeline, Kubernetes. The Dockerfile at this stage is deliberately simple and insecure. This is your "before" state — when Trivy scans it in Phase B you will see every CVE and misconfiguration listed out.
+
+**`docker/Dockerfile` (Phase A — intentionally basic):**
+```dockerfile
+FROM nginx:alpine
+COPY quiz-site /usr/share/nginx/html
+EXPOSE 80
 ```
 
-### Docker Desktop Tips
-- Use WSL2 backend (not Hyper-V)
-- Enable Kubernetes in Docker Desktop
-- Allocate 8GB RAM, 4 CPUs to Docker
-- Enable "Use the WSL 2 based engine"
+What is wrong with this (every item gets fixed in Phase B):
+- `nginx:alpine` is unpinned — a different image may be pulled next week
+- Runs as root — any container escape gives attacker root access to the host
+- Port 80 requires root to bind
+- No HEALTHCHECK — Kubernetes cannot tell if the app is working
+- No package updates — vulnerable OS packages baked in
+- No security headers in nginx config
 
-### VS Code Integration
-- Install "Remote - WSL" extension
-- Open project from WSL: `code ~/projects/cicd-pipeline`
-- Terminal in VS Code will use WSL2 bash
-
----
-
-## 🚨 Common Windows-Specific Issues & Solutions
-
-| Issue | Solution |
-|-------|----------|
-| **Slow Docker builds** | Move project to WSL2 filesystem (`~/<projects/`) |
-| **Git line endings** | `git config --global core.autocrlf input` |
-| **WSL2 using too much RAM** | Configure `.wslconfig` with memory limit |
-| **Can't access localhost** | Ensure `localhostForwarding=true` in `.wslconfig` |
-| **Docker not starting** | Enable Hyper-V and Virtual Machine Platform in Windows Features |
-| **PATH not working** | Add to `~/.bashrc`: `export PATH="$HOME/.local/bin:$PATH"` |
-| **Permission denied** | Run `chmod +x script.sh` in WSL2 |
+**Verify:**
+```bash
+docker build -t quiz-site:local -f docker/Dockerfile .
+docker run -d -p 80:80 quiz-site:local
+# Open http://localhost in browser — confirm quiz loads
+docker stop $(docker ps -q)
+```
 
 ---
 
-## 📊 Remaining Phases (Abbreviated for Space)
+### A3 — GitHub Actions: Build and Push to GHCR
 
-The following phases follow the same structure as the Mac guide but with Windows/WSL2-specific adjustments:
+**What and why:** Manual deployments are error-prone, slow, and unauditable. GitHub Actions automates the build and deploy cycle with a full audit log of every run. At this stage the pipeline builds the image and pushes it — no security gates yet.
 
-- **Phase 4:** Dependency Scanning (npm audit in WSL2)
-- **Phase 5:** Container Security with Trivy (install via apt)
-- **Phase 6:** Image Signing with Cosign (Windows binary available)
-- **Phase 7:** Kubernetes on Docker Desktop
-- **Phase 8:** Secure K8s Deployment (WSL2 kubectl)
-- **Phase 9:** CI/CD Integration (GitHub Actions)
-- **Phase 10:** OPA Gatekeeper Policies
-- **Phase 11:** Prometheus + Grafana Monitoring
-- **Phase 12:** Documentation & Portfolio
+**Why GHCR (GitHub Container Registry)?**
+- Free for public repos
+- No extra account or secrets needed — `GITHUB_TOKEN` is sufficient
+- Image permissions automatically tied to the repository's access controls
+- Alternatives: Docker Hub (requires account + secret), AWS ECR (requires AWS account)
 
-*All phases work identically on Windows + WSL2 once the base environment is configured.*
+**`.github/workflows/pipeline.yml`:**
+```yaml
+name: CI/CD Pipeline
 
----
+on:
+  push:
+    branches: [main]
 
-## 🎯 Success Criteria
+permissions:
+  contents: read
+  packages: write
 
-### Technical
-- ✅ WSL2 and Docker Desktop running smoothly
-- ✅ All builds complete in < 10 minutes
-- ✅ Zero critical vulnerabilities
-- ✅ 100% policy compliance
-- ✅ Works from both Windows and WSL2
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-### Performance Benchmarks (on your hardware)
-- Docker build: < 2 minutes
-- SAST scan: < 1 minute
-- Container scan: < 30 seconds
-- Kubernetes deployment: < 1 minute
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
----
+      - name: Build Docker image
+        run: docker build -t quiz-site:${{ github.sha }} -f docker/Dockerfile .
 
-## 🎉 Your Laptop is Perfect for This!
-
-**Why your setup is great:**
-- ✅ **16GB RAM** - Plenty for Docker + K8s + monitoring
-- ✅ **RTX 3050** - Future-proofing for ML/AI security tools
-- ✅ **Windows 11** - Latest WSL2 improvements
-- ✅ **SSD** - Fast Docker layer caching
-
-**You can run:**
-- Full Kubernetes cluster (2-3 nodes)
-- Prometheus + Grafana + Loki
-- Multiple container builds simultaneously
-- All security scanning tools
-- VS Code + browser + terminals
+      - name: Push to GHCR
+        run: |
+          docker tag quiz-site:${{ github.sha }} ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }}
+          docker tag quiz-site:${{ github.sha }} ghcr.io/${{ github.repository }}/quiz-site:latest
+          docker push ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}/quiz-site:latest
+```
 
 ---
 
-## 💡 Next Steps
+### A4 — Kubernetes Manifests (Basic, Intentionally Insecure)
 
-1. **Start with Phase 0** - Get WSL2 + Docker Desktop running
-2. **Follow sequentially** - Each phase builds on previous
-3. **Test thoroughly** - Verify each step before moving forward
-4. **Document everything** - Great for portfolio
-5. **Join communities** - WSL Discord, Docker forums, K8s Slack
+**What and why:** These manifests get the app running in Kubernetes. They are intentionally missing security controls — no security context, no resource limits, no network policies. This is your "before" state. When Checkov scans these in Phase B, it will list every CIS benchmark violation. You will fix them one by one and understand why each fix matters.
+
+**`k8s/base/namespace.yaml`:**
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quiz-app
+```
+
+**`k8s/base/deployment.yaml`:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-site
+  namespace: quiz-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quiz-site
+  template:
+    metadata:
+      labels:
+        app: quiz-site
+    spec:
+      containers:
+        - name: quiz-site
+          image: ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPO/quiz-site:latest
+          ports:
+            - containerPort: 80
+```
+
+**`k8s/base/service.yaml`:**
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: quiz-site
+  namespace: quiz-app
+spec:
+  selector:
+    app: quiz-site
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+  type: NodePort
+```
 
 ---
 
-**Good luck! Your hardware is more than capable. Let's build something awesome! 🚀**
+### A5 — Add Deploy Step to GitHub Actions
 
-*Windows + WSL2 gives you the best of both worlds: Windows desktop + Linux development environment.*
+Add a `deploy` job to `pipeline.yml` after the `build` job:
+
+```yaml
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f k8s/base/
+
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/quiz-site \
+            quiz-site=ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }} \
+            -n quiz-app
+
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/quiz-site -n quiz-app --timeout=120s
+```
+
+---
+
+### A6 — Phase A Complete: Verify End-to-End
+
+Phase A is done when all of the following are true:
+
+- [ ] `git push` to main triggers the GitHub Actions pipeline automatically
+- [ ] GitHub Actions builds the Docker image
+- [ ] Image is pushed to GHCR (visible at `github.com/YOUR_USERNAME/REPO/pkgs/container/quiz-site`)
+- [ ] App is deployed to Kubernetes
+- [ ] App is accessible at `http://localhost:30080`
+- [ ] `kubectl get pods -n quiz-app` shows the pod Running
+
+**At this point you have a working, fully automated pipeline. It is also completely insecure. Phase B fixes that, one layer at a time.**
+
+---
+
+---
+
+## Phase B — Secure the Pipeline
+
+> For every section: understand the vulnerability first. Then implement the fix. The before/after difference is the learning.
+
+---
+
+### B1 — Secrets and Authentication
+
+#### The Vulnerability
+
+Secrets (API keys, passwords, tokens) committed to Git are permanent. Even if you delete the file, the secret exists in git history forever and can be recovered with `git log`. In 2022, Toyota accidentally pushed an AWS access key to a public GitHub repo — 300,000 customer records were exposed for nearly five years before discovery.
+
+The second problem: GitHub Actions workflows often have overly broad token permissions. A compromised workflow step or malicious dependency can use `GITHUB_TOKEN` with write access to push code, create releases, or tamper with the repository.
+
+---
+
+#### B1a — Local Secret Detection: Gitleaks Pre-commit Hook
+
+**Why Gitleaks for local, not TruffleHog?**
+
+| | Gitleaks | TruffleHog |
+|---|---|---|
+| Speed | Near-instant | 3–10 seconds per run |
+| Detection method | Pattern matching on staged files | Calls real APIs to verify the secret is live |
+| False positive rate | Higher | Much lower in verified-only mode |
+| Best for | Pre-commit hook (speed matters for developer experience) | CI/CD deep scan (speed less critical) |
+
+A pre-commit hook that takes 10 seconds per commit gets disabled. Gitleaks is fast enough to be invisible to the developer.
+
+**`.git/hooks/pre-commit`:**
+```bash
+#!/bin/bash
+echo "Scanning for secrets..."
+gitleaks protect --staged --no-banner -v
+if [ $? -ne 0 ]; then
+  echo "SECRET DETECTED — commit blocked. Remove the secret and try again."
+  exit 1
+fi
+exit 0
+```
+
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+**Test it:**
+```bash
+echo 'AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' > test.txt
+git add test.txt
+git commit -m "test"
+# Should be blocked with "SECRET DETECTED"
+git reset HEAD test.txt && rm test.txt
+```
+
+---
+
+#### B1b — CI Secret Detection: TruffleHog
+
+**Why TruffleHog for CI?**
+
+TruffleHog in `--only-verified` mode calls the real APIs (GitHub, AWS, Stripe, etc.) to confirm a detected credential is active. This eliminates false positives — you only get an alert when the secret is real and working. It also scans the full git history, not just the latest commit. A key committed six months ago and then deleted in a later commit is still there in history — TruffleHog finds it.
+
+**`.github/workflows/trufflehog.yml`:**
+```yaml
+name: Secret Scanning
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive scan
+
+      - uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+```
+
+---
+
+#### B1c — Minimum GitHub Actions Permissions
+
+By default, GitHub Actions gives every workflow write access to the repository. Lock every workflow to the minimum it needs.
+
+Add to the top-level of every workflow file:
+```yaml
+permissions:
+  contents: read
+```
+
+Then add back only what the specific job needs:
+- Workflows that upload SARIF: `security-events: write`
+- Workflows that push to GHCR: `packages: write`
+- Workflows that use OIDC: `id-token: write`
+
+**Why this matters:** If a supply chain attack compromises a GitHub Action you use (e.g., a malicious version of `actions/checkout`), minimal permissions limit what the attacker can do. They cannot push code, create releases, or read your secrets.
+
+---
+
+#### B1d — No Long-Lived Credentials: OIDC
+
+Instead of storing cloud credentials as GitHub Secrets (which never expire), use OIDC (OpenID Connect). GitHub Actions can prove its identity to AWS, Azure, or GCP without a stored secret. The cloud provider issues a short-lived token just for that job run — it expires when the job ends.
+
+```yaml
+- name: Configure AWS credentials via OIDC
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    role-to-assume: arn:aws:iam::123456789:role/github-actions
+    aws-region: us-east-1
+```
+
+No secret stored anywhere. No rotation needed. Automatically scoped to the specific GitHub repo and branch.
+
+**What real enterprises use:** HashiCorp Vault for dynamic secrets that are generated per-job and expire after use. AWS IAM roles with OIDC federation. Google Workload Identity Federation. Azure Managed Identities. The pattern is always: short-lived credentials, minimal scope, automatic expiry, no human-readable secrets stored anywhere.
+
+**What can be improved:** Add `.trufflehogignore` for documented false positives. Implement secret rotation schedules with automated reminders. Use GitHub Environments with required reviewers before secrets are injected into workflows.
+
+---
+
+### B2 — Code Security: SAST with Semgrep
+
+#### The Vulnerability
+
+Source code contains patterns that lead to vulnerabilities — SQL injection, XSS, command injection, weak cryptography — that only become exploitable at runtime. Finding these issues in production costs 30x more than finding them at commit time. SAST (Static Application Security Testing) finds them by analysing code without running it.
+
+**Why Semgrep (not SonarQube or CodeQL)?**
+
+| Tool | Pros | Cons | Best for |
+|---|---|---|---|
+| Semgrep | Fast, custom rules in readable YAML, free OSS | Fewer built-in rules than commercial tools | Open source, custom detection needs |
+| SonarQube | Comprehensive, great UX, IDE integration | Self-hosted is complex, cloud is expensive | Enterprise teams with budget |
+| CodeQL | Very deep analysis, GitHub-native | Slow (10–30 min per run), limited languages | Critical repositories needing depth |
+| Snyk Code | PR comments, fix suggestions, good UX | Paid for teams | Teams wanting turn-key SAST |
+
+Semgrep is right here because it is free, fast in CI, and the custom rule syntax is simple enough that you can write a new rule in 10 minutes. You understand exactly what is being detected because you wrote it.
+
+**`.semgrep.yml` (custom rules):**
+```yaml
+rules:
+  - id: no-eval
+    pattern: eval($X)
+    message: "eval() is dangerous — user input can execute arbitrary code."
+    severity: ERROR
+    languages: [javascript]
+    metadata:
+      cwe: "CWE-95"
+
+  - id: no-innerhtml
+    pattern: $EL.innerHTML = $INPUT
+    message: "innerHTML can introduce XSS. Use textContent or sanitise with DOMPurify."
+    severity: WARNING
+    languages: [javascript]
+    metadata:
+      cwe: "CWE-79"
+
+  - id: hardcoded-credential
+    patterns:
+      - pattern: $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (password|passwd|secret|api_key|apikey|token|credential)
+    message: "Potential hardcoded credential. Use environment variables or a secrets manager."
+    severity: ERROR
+    languages: [javascript, python]
+    metadata:
+      cwe: "CWE-798"
+
+  - id: weak-random
+    pattern: Math.random()
+    message: "Math.random() is not cryptographically secure. Use crypto.getRandomValues() for security-sensitive operations."
+    severity: WARNING
+    languages: [javascript]
+    metadata:
+      cwe: "CWE-338"
+
+  - id: debug-console-log
+    pattern: console.log($X)
+    message: "Remove console.log before production — may expose sensitive data in browser DevTools."
+    severity: INFO
+    languages: [javascript]
+```
+
+**`.github/workflows/semgrep.yml`:**
+```yaml
+name: SAST — Semgrep
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config=auto \
+            --config=.semgrep.yml \
+            --sarif \
+            --output=semgrep.sarif \
+            --metrics=off
+
+      - name: Upload to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+        if: always()
+```
+
+**What SARIF does:** SARIF (Static Analysis Results Interchange Format) is a standard JSON format that GitHub's Security tab understands. Every tool in this pipeline uploads SARIF — so all findings from Semgrep, Trivy, and Checkov appear in one place (Repository → Security → Code Scanning), regardless of which tool found them.
+
+#### Branch Protection (Process Security)
+
+No tool catches everything. Process controls add a human layer on top of automation.
+
+GitHub → Repository Settings → Branches → Add rule for `main`:
+- Require pull request before merging (minimum 1 approval)
+- Require status checks to pass before merging (select: Semgrep, TruffleHog)
+- Require branches to be up to date before merging
+- Do not allow bypassing the above settings (including admins)
+
+**What real enterprises use:** SonarQube quality gates that block merges below a defined security rating. CodeQL for deep analysis on repositories with elevated risk. IBM AppScan or Veracode for compliance-driven SAST with formal audit reports required by regulators.
+
+**What can be improved:** Add Semgrep to the pre-commit hook alongside Gitleaks for instant local SAST feedback. Configure the pipeline to block only on ERROR severity, and allow WARNING with a notification. Add Semgrep's GitHub integration to post findings as PR review comments.
+
+---
+
+### B3 — Infrastructure Security: Checkov IaC Scanning
+
+#### The Vulnerability
+
+Infrastructure as Code (Dockerfile, Kubernetes YAML) contains security misconfigurations that are invisible to application SAST tools. A Dockerfile that runs as root, a Kubernetes deployment with no resource limits, a pod with `privileged: true` — all of these pass code review and automated testing but create serious holes at runtime.
+
+**Why Checkov?**
+
+| Tool | Scans | Best for |
+|---|---|---|
+| Checkov | Dockerfile, K8s, Terraform, CloudFormation, GitHub Actions | One tool for all IaC — best breadth |
+| kube-score | Kubernetes YAML only | K8s-focused teams |
+| Trivy | Dockerfile misconfigs + CVEs | Already in the stack — overlap with B5 |
+| tfsec | Terraform only | Terraform-heavy teams |
+
+Checkov wins here because one command scans all your IaC types. It maps findings to CIS benchmarks and common security standards.
+
+**Add to the Semgrep workflow or create `checkov.yml`:**
+```yaml
+  checkov:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov on Dockerfile
+        uses: bridgecrewio/checkov-action@master
+        with:
+          file: docker/Dockerfile
+          framework: dockerfile
+          output_format: sarif
+          output_file_path: checkov-docker.sarif
+          soft_fail: true
+
+      - name: Run Checkov on Kubernetes manifests
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: k8s/
+          framework: kubernetes
+          output_format: sarif
+          output_file_path: checkov-k8s.sarif
+          soft_fail: true
+
+      - name: Upload results
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: checkov-docker.sarif
+        if: always()
+```
+
+**What Checkov will flag on your Phase A Dockerfile:**
+- `CKV_DOCKER_2` — No HEALTHCHECK defined
+- `CKV_DOCKER_3` — Container does not run as a non-root user
+- `CKV_DOCKER_7` — Base image version not pinned
+
+**What Checkov will flag on your Phase A K8s manifests:**
+- `CKV_K8S_8` — No liveness probe
+- `CKV_K8S_9` — No readiness probe
+- `CKV_K8S_11` — No CPU limits
+- `CKV_K8S_12` — No memory limits
+- `CKV_K8S_14` — Container can run as root
+- `CKV_K8S_20` — Privilege escalation not disabled
+- `CKV_K8S_28` — Capabilities not dropped
+- `CKV_K8S_30` — Root filesystem not read-only
+
+Each violation is a real finding you will fix in later steps. Running Checkov on the insecure Phase A manifests first is the learning exercise.
+
+**What real enterprises use:** Prisma Cloud (commercial, built on Checkov) for cloud-native visibility across AWS, Azure, and GCP. Snyk IaC for teams already using Snyk. Terraform Sentinel for policy enforcement in Terraform Cloud.
+
+---
+
+### B4 — Container Hardening: Securing the Dockerfile
+
+#### The Vulnerability
+
+Your Phase A Dockerfile runs as root. If the application is exploited (path traversal, RCE, dependency vulnerability), the attacker operates as root inside the container. Container escapes are rare but more dangerous from root. A minimal, patched, non-root image significantly reduces blast radius.
+
+**`docker/Dockerfile` (replace the Phase A version):**
+```dockerfile
+FROM nginx:1.25-alpine
+
+# Patch all OS packages — eliminates known CVEs present in the base image
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+# Create non-root user — nginx specifically needs UID 101
+RUN addgroup -g 101 -S nginx || true && \
+    adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx nginx || true
+
+# Custom nginx config with security headers
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+
+# Copy application
+COPY quiz-site /usr/share/nginx/html
+
+# Set ownership so the non-root user can serve files and write logs
+RUN chown -R nginx:nginx /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    touch /var/run/nginx.pid && \
+    chown nginx:nginx /var/run/nginx.pid
+
+# Drop to non-root — all subsequent operations and the running process use this user
+USER nginx
+
+# 8080 is unprivileged (above 1024) — no root required
+EXPOSE 8080
+
+# Kubernetes uses this to decide if the pod is healthy and ready for traffic
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+**`docker/nginx.conf`:**
+```nginx
+user nginx;
+worker_processes auto;
+pid /var/run/nginx.pid;
+error_log /var/log/nginx/error.log warn;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    server_tokens off;  # Do not reveal nginx version in response headers
+
+    # Browser security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" always;
+
+    sendfile on;
+    keepalive_timeout 65;
+
+    server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location ~ /\. {
+            deny all;
+        }
+    }
+}
+```
+
+**What changes and why:**
+
+| Change | Phase A | Phase B | Why it matters |
+|---|---|---|---|
+| Base image pinning | `nginx:alpine` | `nginx:1.25-alpine` | Reproducible builds; no surprise upstream changes |
+| OS packages | Unpatched at image creation | `apk upgrade` on every build | Removes CVEs present in the base image |
+| Running user | root (UID 0) | nginx (UID 101) | Container escape gives limited user account, not host root |
+| Port | 80 (requires root to bind) | 8080 (unprivileged) | Non-root process can bind without special privileges |
+| Health check | None | HEALTHCHECK defined | Kubernetes can restart unhealthy pods automatically |
+| Server header | nginx version exposed | `server_tokens off` | Attackers cannot target specific nginx CVE versions |
+| Security headers | None | X-Frame, CSP, etc. | Browser-level protection against XSS, clickjacking, MIME sniffing |
+
+**What real enterprises use:** Distroless images (no shell, no package manager — nothing to attack). Chainguard images (hardened, CVE-free Alpine alternatives). Automated base image updates via Renovate or Dependabot so CVEs are patched within hours of disclosure, not months.
+
+---
+
+### B5 — Container Scanning: Trivy
+
+#### The Vulnerability
+
+Your container image contains an operating system and nginx — both with published CVEs in public vulnerability databases. Without scanning, you push and deploy an image containing known, patchable vulnerabilities. An attacker who reaches the container layer can exploit those CVEs to escalate privileges or move laterally within the cluster.
+
+**Why Trivy (not Snyk Container or Grype)?**
+
+| Tool | Strengths | Weaknesses | Best for |
+|---|---|---|---|
+| Trivy | Scans OS CVEs + app deps + Dockerfile misconfigs + K8s misconfigs, fast, free, offline mode | Fewer integrations than commercial | Open source, one-tool breadth |
+| Snyk Container | PR comments, developer UX, auto fix PRs | Paid for teams, rate limited on free | Teams wanting developer-facing UX |
+| Grype | Fast, good SBOM integration | Fewer language ecosystems | SBOM-focused workflows |
+| AWS ECR scanning | Built-in if using ECR | Only works in AWS ECR | AWS-native teams |
+
+Trivy handles container CVEs, Dockerfile misconfigs, and secrets in image layers — all in one tool. It is the standard in the Kubernetes ecosystem.
+
+**Add to `pipeline.yml` after the Docker build step, before push:**
+```yaml
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: quiz-site:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: 1
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
+        if: always()
+```
+
+`exit-code: 1` is the security gate. If Trivy finds CRITICAL or HIGH CVEs, the pipeline fails and the image is never pushed to GHCR. You must fix the image (update packages, change base image) before the code can deploy.
+
+**The before/after learning moment:** Run Trivy against your unpatched Phase A image and note the CVE count. Then harden the Dockerfile (Phase B4), rebuild, and run Trivy again. Watching the CVE count drop to near zero makes the impact of container hardening concrete.
+
+**What real enterprises use:** Trivy Operator running inside the Kubernetes cluster for continuous rescanning of images that are already deployed. AWS Inspector for images in ECR. Google Artifact Registry with vulnerability scanning enabled. Snyk Container for developer-facing findings with fix recommendations. At scale, all of these feed into a central security dashboard showing CVE trends over time.
+
+---
+
+### B6 — Supply Chain Security: Image Signing with Cosign
+
+#### The Vulnerability
+
+After your pipeline builds and scans an image, it pushes it to GHCR. But nothing prevents an attacker with write access to GHCR from pushing a backdoored image with the `latest` tag. Your cluster would pull and deploy it on the next rollout — and you would have no way to know it was not built by your pipeline.
+
+This is a supply chain attack. The SolarWinds breach happened this way: the build process itself was compromised, and malicious code was inserted into signed software updates. Supply chain attacks are now the highest-priority threat category in enterprise security.
+
+**Why Cosign?**
+
+Cosign is part of the Sigstore project — a free, open-source standard for software artifact signing backed by Google, Red Hat, and the Linux Foundation. It attaches a cryptographic signature to a container image stored in the registry alongside the image. Before deployment, the signature is verified — if it does not match or is absent, deployment fails.
+
+Alternatives:
+- Notary v2 — Docker's signing specification, more complex setup
+- AWS Signer — AWS-native, works only within the AWS ecosystem
+- DigiCert — Enterprise commercial code signing
+
+Cosign is the right choice here because it is free, widely adopted in the Kubernetes and cloud-native ecosystem, and integrates directly with OPA Gatekeeper (Phase B10) to enforce signature verification as a deployment policy.
+
+**Setup (run in WSL2 once):**
+```bash
+cosign generate-key-pair
+# Creates cosign.key (private) and cosign.pub (public)
+# cosign.key is already in .gitignore — NEVER commit it
+```
+
+Add to GitHub Secrets:
+- `COSIGN_PRIVATE_KEY` — contents of `cosign.key`
+- `COSIGN_PASSWORD` — the passphrase you chose
+- `COSIGN_PUBLIC_KEY` — contents of `cosign.pub`
+
+**Add to `pipeline.yml` after Trivy passes:**
+```yaml
+      - name: Sign image with Cosign
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY \
+            ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }}
+
+      - name: Verify image signature before deploy
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          cosign verify --key env://COSIGN_PUBLIC_KEY \
+            ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }}
+```
+
+**What real enterprises use:** Sigstore keyless signing — uses OIDC identity (GitHub Actions' ephemeral identity) instead of a stored key. No key management required. SLSA (Supply chain Levels for Software Artifacts) framework — a set of graduated standards published by Google for supply chain integrity. Enterprises aiming for SLSA Level 3 can cryptographically prove the build environment was not tampered with.
+
+---
+
+### B7 — Dependency Scanning
+
+#### The Vulnerability
+
+Your application's dependencies — npm packages, OS libraries — may have known CVEs. You did not write that code, but you are responsible for running it. Log4Shell (2021) affected hundreds of thousands of applications because they included a single vulnerable Java logging library. Organisations that had no dependency scanning took weeks to identify their exposure.
+
+**Dependabot — GitHub native, zero configuration:**
+
+Create `.github/dependabot.yml`:
+```yaml
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Add if npm packages are added to the project:
+  # - package-ecosystem: npm
+  #   directory: /quiz-site
+  #   schedule:
+  #     interval: daily
+```
+
+Dependabot automatically opens PRs when a newer nginx base image is available with security fixes, or when a GitHub Action you use has a new version. You review and merge the PR — the pipeline handles the rest.
+
+**SBOM Generation (Software Bill of Materials):**
+
+An SBOM is a complete inventory of every component in your software — like an ingredients list. It is becoming a regulatory requirement in many industries following US Executive Order 14028. Insurance companies now ask for SBOMs before issuing cyber insurance.
+
+```yaml
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}/quiz-site:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.spdx.json
+```
+
+**What real enterprises use:** Snyk for dependency scanning with developer-facing fix recommendations and a developer portal. JFrog Xray for artifact repository scanning integrated with JFrog Artifactory. GitHub Advanced Security with Dependabot at scale across hundreds of repositories. All outputs feed into a central dashboard showing dependency vulnerability trends across the entire organisation.
+
+---
+
+### B8 — Kubernetes Security Contexts
+
+#### The Vulnerability
+
+Your Phase A Kubernetes deployment runs the container as root with full Linux capabilities and a writable filesystem. Inside the cluster, a compromised root pod can: write arbitrary files to the container filesystem, escalate to the host node using specific capabilities like `SYS_ADMIN`, read environment variables from other pods, and use network capabilities to intercept cluster traffic.
+
+**`k8s/base/deployment.yaml` (replace the Phase A version):**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-site
+  namespace: quiz-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: quiz-site
+  template:
+    metadata:
+      labels:
+        app: quiz-site
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: quiz-site
+          image: ghcr.io/YOUR_USERNAME/YOUR_REPO/quiz-site:latest
+          ports:
+            - containerPort: 8080
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-pid
+              mountPath: /var/run
+
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-pid
+          emptyDir: {}
+```
+
+**What each security control does:**
+
+| Control | Without it | With it |
+|---|---|---|
+| `runAsNonRoot: true` | Container may start as root | Kubernetes rejects pods that try to run as root |
+| `readOnlyRootFilesystem: true` | Attacker can write files (malware, modified configs) | Filesystem is immutable — writes fail at the kernel level |
+| `allowPrivilegeEscalation: false` | Process can gain root via setuid binaries | Kernel blocks all privilege escalation attempts |
+| `capabilities: drop: [ALL]` | Container has 30+ Linux capabilities | Zero capabilities — minimal attack surface |
+| `resources.limits` | One pod can consume all node memory/CPU | Other pods are protected from resource starvation (DoS) |
+| `seccompProfile: RuntimeDefault` | All 300+ Linux syscalls available | Only ~150 commonly needed syscalls permitted |
+
+**What real enterprises use:** Pod Security Admission (built into Kubernetes since 1.25) with the `restricted` profile enforced at the namespace level — applies all of the above controls automatically to every pod in the namespace. Custom seccomp profiles tailored per application. AppArmor or SELinux profiles for Mandatory Access Control at the kernel level.
+
+---
+
+### B9 — Network Policies
+
+#### The Vulnerability
+
+By default in Kubernetes, every pod can communicate with every other pod in the cluster on any port. If an attacker compromises one pod — say, through a vulnerable npm dependency — they can immediately reach your database, your secrets store, your internal APIs, and every other service in the cluster. This lateral movement is how most Kubernetes breaches escalate from a single compromised pod to full cluster access.
+
+**`k8s/base/networkpolicy.yaml`:**
+```yaml
+# Default deny: block all traffic in and out of every pod in this namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: quiz-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Allow traffic to the quiz-site pod on port 8080 only
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-quiz-site-ingress
+  namespace: quiz-app
+spec:
+  podSelector:
+    matchLabels:
+      app: quiz-site
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+
+---
+# Allow DNS resolution — pods need this to resolve any hostname
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: quiz-app
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+```
+
+**What real enterprises use:** Calico or Cilium as the CNI (Container Network Interface) — both offer richer network policy capabilities than the default Kubernetes implementation, including Layer 7 (HTTP-level) policies. A service mesh (Istio, Linkerd) for mutual TLS between every pod — all pod-to-pod communication is authenticated and encrypted by default. Cilium's eBPF-based policies with near-zero performance overhead at scale.
+
+---
+
+### B10 — Policy as Code: OPA Gatekeeper
+
+#### The Vulnerability
+
+Security contexts, network policies, and resource limits exist as YAML that developers can forget, skip under deadline pressure, or misconfigure. There is no enforcement at the cluster level — a deployment submitted without a security context will happily run. Security is dependent on developer memory and code review thoroughness.
+
+OPA Gatekeeper is a Kubernetes admission controller that intercepts every resource creation request and evaluates it against your policy rules (written in Rego). A deployment that violates a policy is rejected at the API server before it ever runs — not logged, not warned about, blocked.
+
+**Why OPA Gatekeeper (not Kyverno)?**
+
+| Tool | Pros | Cons |
+|---|---|---|
+| OPA Gatekeeper | Industry standard, powerful Rego language, used in enterprise | Rego has a learning curve |
+| Kyverno | YAML-native policies (no new language), easier to start | Less flexible for complex logic |
+
+OPA is more widely adopted in enterprise environments and teaches Rego — a policy language used beyond Kubernetes in API authorisation, cloud config validation, and data access control.
+
+**Install:**
+```bash
+kubectl apply -f https://raw.githubusercontent.com/open-policy-agent/gatekeeper/release-3.14/deploy/gatekeeper.yaml
+```
+
+**Example policy — require non-root user:**
+
+`k8s/gatekeeper/require-non-root.yaml`:
+```yaml
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireNonRootUser
+metadata:
+  name: require-non-root-user
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    namespaces: ["quiz-app"]
+```
+
+**Example policy — require resource limits:**
+
+`k8s/gatekeeper/require-limits.yaml`:
+```yaml
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResources
+metadata:
+  name: require-resource-limits
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+  parameters:
+    limits: ["cpu", "memory"]
+    requests: ["cpu", "memory"]
+```
+
+**What real enterprises use:** OPA Gatekeeper with the full Gatekeeper Policy Library covering the CIS Kubernetes Benchmark. Kyverno in teams preferring YAML-native policies. Styra DAS (commercial OPA management platform) for large-scale policy governance across many clusters. Both OPA and Kyverno integrating with GitOps pipelines — policy changes go through the same PR review and CI pipeline as application code.
+
+---
+
+### B11 — Runtime Security: Falco + Monitoring
+
+#### The Vulnerability
+
+Every security control so far is preventive — it stops known attack patterns. But attackers find novel techniques. Runtime security detects anomalous behaviour happening inside running containers: a container that suddenly spawns a shell, reads `/etc/shadow`, makes unexpected outbound connections, or executes a binary from `/tmp`.
+
+Without monitoring, you also have no visibility into pipeline health, deployment frequency, or security posture trends.
+
+---
+
+#### B11a — Falco (Runtime Threat Detection)
+
+Falco watches every Linux syscall made by every container in the cluster and alerts when the behaviour matches known attack patterns. It is the same engine that powers commercial products like Sysdig Secure and Aqua Runtime Security.
+
+**Install via Helm:**
+```bash
+helm repo add falcosecurity https://falcosecurity.github.io/charts
+helm repo update
+helm install falco falcosecurity/falco \
+  --namespace falco \
+  --create-namespace \
+  --set falco.grpc.enabled=true \
+  --set falcosidekick.enabled=true \
+  --set falcosidekick.config.slack.webhookurl=YOUR_SLACK_WEBHOOK
+```
+
+**Default Falco rules that fire on real attack patterns:**
+
+| Rule | What it detects | Why it matters |
+|---|---|---|
+| Terminal shell in container | `bash`, `sh`, `zsh` spawned in a running container | Attackers use interactive shells for manual exploration |
+| Read sensitive file | Read of `/etc/shadow`, `/etc/passwd`, `/proc/*/environ` | Credential harvesting |
+| Write below binary dirs | Write to `/bin`, `/usr/bin`, `/sbin` | Malware installation |
+| Outbound connection from unexpected container | New outbound connection from a container with no prior egress | C2 (command and control) beaconing |
+| Run shell in container via kubectl exec | `kubectl exec` into a production pod | Insider threat, post-compromise investigation |
+| Execution from /tmp | Binary executed from temporary directory | Common malware staging pattern |
+
+---
+
+#### B11b — Prometheus + Grafana (Observability)
+
+**Install via Helm:**
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace
+```
+
+**Security dashboard metrics to track:**
+
+| Metric | What drift means |
+|---|---|
+| Pipeline failure rate | A spike means attempted attacks or broken security gates |
+| Deployment frequency | A drop means teams are bypassing the pipeline |
+| Trivy CVE count over time | Rising trend means base image is accumulating unpatched CVEs |
+| Falco alert rate by rule | New patterns indicate novel attack techniques being attempted |
+| Time to patch (CVE published → image updated) | Enterprise target: under 24 hours for CRITICAL CVEs |
+| Failed Cosign verifications | Any nonzero value means something is trying to deploy unsigned images |
+
+**What real enterprises use:** Datadog, Splunk, or Elastic Stack as a centralised SIEM. Falco with Falcosidekick routing alerts to PagerDuty, Slack, or AWS Security Hub. OpenTelemetry for vendor-neutral observability. Grafana Loki for log aggregation. The architecture you are building here is identical — the enterprise version just replaces the self-hosted components with managed services.
+
+---
+
+### B12 — The Complete Secured Pipeline
+
+This is the full pipeline when every Phase B control is in place:
+
+```
+git push to main
+        ↓
+[ Gate 1: Secret Scanning ]
+  TruffleHog — verified secrets block the pipeline
+        ↓
+[ Gate 2: Code Security ]
+  Semgrep — ERROR severity findings fail the pipeline
+  Checkov — CRITICAL IaC misconfigs fail the pipeline
+        ↓
+[ Gate 3: Build ]
+  Docker build with hardened Dockerfile
+        ↓
+[ Gate 4: Container Scanning ]
+  Trivy — CRITICAL/HIGH CVEs fail the pipeline
+  Image is NOT pushed if Trivy fails
+        ↓
+[ Gate 5: Push + Sign ]
+  Image pushed to GHCR
+  Cosign signs the image with private key
+        ↓
+[ Gate 6: Verify + Deploy ]
+  Cosign verifies signature (unsigned = deploy fails)
+  kubectl apply — OPA Gatekeeper validates at admission
+  Root containers, missing limits, unsigned images all rejected
+        ↓
+[ Gate 7: Rollout Confirmation ]
+  kubectl rollout status — confirms pods healthy
+        ↓
+App running in Kubernetes:
+  Non-root, read-only filesystem, dropped capabilities
+  Resource limits, liveness/readiness probes
+  Network policies (deny-all + explicit allows only)
+  Falco monitoring every syscall
+  Prometheus + Grafana tracking posture over time
+```
+
+---
+
+### B13 — Configuration, Compliance and Signed Commits
+
+#### GitHub Repository Security Settings
+
+Settings → Security → Code security and analysis — enable all:
+- Dependency graph
+- Dependabot alerts
+- Dependabot security updates
+- Secret scanning (GitHub native, catches common token patterns)
+- Push protection (blocks pushes that contain secrets before they land in history)
+- Code scanning (receives all SARIF uploads from your workflows)
+
+#### GPG Signed Commits
+
+Signed commits prove that a commit was made by a specific person and was not tampered with after the fact. GitHub shows a "Verified" badge.
+
+```bash
+# In WSL2
+gpg --full-generate-key
+git config --global user.signingkey YOUR_KEY_ID
+git config --global commit.gpgsign true
+
+# Export public key and add to GitHub → Settings → SSH and GPG keys
+gpg --armor --export YOUR_KEY_ID
+```
+
+Enable in branch protection: "Require signed commits."
+
+#### `.gitignore` for Security
+
+```
+.env
+*.env
+cosign.key
+*.pem
+*.key
+*.crt
+*_rsa
+secrets.yaml
+*-secret.yaml
+```
+
+---
+
+## Monthly Review Checklist
+
+Run this every month to prevent security drift:
+
+- [ ] Rotate any long-lived credentials (GitHub PATs, API keys, signing keys)
+- [ ] Review and merge pending Dependabot security update PRs
+- [ ] Check Trivy CVE count trend — rising means base image needs updating
+- [ ] Review GitHub Security tab — any unresolved code scanning alerts?
+- [ ] Review Falco alerts from the past month — any anomalous patterns?
+- [ ] Audit who has access to the repository and to GitHub Secrets
+- [ ] Check GitHub Actions versions — pin to a specific SHA for production-grade security
+- [ ] Review OPA Gatekeeper policy violations from the past month
+- [ ] Check if any secrets have been unused for 90+ days — rotate or revoke
+
+---
+
+## Incident Response
+
+**If a secret is leaked (committed to git):**
+1. Immediately rotate or revoke the credential at the source (GitHub, AWS, Stripe)
+2. Within 1 hour: remove the secret from git history using `git filter-repo`
+3. Within 1 hour: audit access logs — was the credential used after it was committed?
+4. Document: what was exposed, for how long, what data was accessible
+5. Fix the gap: which pre-commit hook or CI gate missed it?
+
+**If a compromised image is deployed:**
+1. Immediately: `kubectl rollout undo deployment/quiz-site -n quiz-app`
+2. Block the image: remove it from GHCR, revoke the Cosign signature
+3. Investigate: what did Falco detect? What did the container actually do?
+4. Patch and redeploy through the full secured pipeline
+
+---
+
+## Tool Stack Reference
+
+| Tool | Phase | Purpose | Free? | Enterprise Alternative |
+|---|---|---|---|---|
+| Gitleaks | B1 | Local secret detection (pre-commit) | Yes | HashiCorp Vault + pre-commit framework |
+| TruffleHog | B1 | CI secret scanning with API verification | Yes | GitHub Advanced Security |
+| Semgrep | B2 | SAST — source code vulnerability scanning | Yes (OSS) | SonarQube, Veracode, Snyk Code |
+| Checkov | B3 | IaC misconfiguration scanning | Yes | Prisma Cloud, Snyk IaC |
+| Trivy | B5 | Container CVE scanning | Yes | Snyk Container, Aqua, AWS Inspector |
+| Cosign | B6 | Container image signing (supply chain) | Yes | Notary v2, DigiCert |
+| Dependabot | B7 | Dependency update automation | Yes (GitHub) | Snyk, Renovate |
+| OPA Gatekeeper | B10 | Policy enforcement at K8s admission | Yes | Kyverno, Styra DAS |
+| Falco | B11 | Runtime syscall-level threat detection | Yes | Sysdig Secure, Aqua Runtime |
+| Prometheus | B11 | Metrics collection | Yes | Datadog, New Relic |
+| Grafana | B11 | Metrics visualisation + security dashboards | Yes | Datadog, Splunk |

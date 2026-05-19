@@ -1,0 +1,34 @@
+rules:
+  - id: no-eval
+    pattern: eval($X)
+    message: "eval() executes arbitrary code. Never use with user input."
+    severity: ERROR
+    languages: [javascript]
+
+  - id: no-innerhtml
+    pattern: $EL.innerHTML = $INPUT
+    message: "innerHTML can introduce XSS. Use textContent or DOMPurify instead."
+    severity: WARNING
+    languages: [javascript]
+
+  - id: hardcoded-credential
+    patterns:
+      - pattern: $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (password|passwd|secret|api_key|apikey|token|credential)
+    message: "Hardcoded credential detected. Use environment variables instead."
+    severity: ERROR
+    languages: [javascript]
+
+  - id: weak-random
+    pattern: Math.random()
+    message: "Math.random() is not cryptographically secure. Use crypto.getRandomValues() for anything security-sensitive."
+    severity: WARNING
+    languages: [javascript]
+
+  - id: no-console-log
+    pattern: console.log($X)
+    message: "Remove console.log before production. May expose sensitive data in browser DevTools."
+    severity: INFO
+    languages: [javascript]

@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   packages: write  # Required to push to GHCR
+  security-events: write  # Required to upload SARIF results
 
 jobs:
   build-and-push:

@@ -58,6 +58,22 @@ jobs:
         run: |
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
+      
+      - name: Sign image with Cosign
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        run: |
+          cosign sign --key env://COSIGN_PRIVATE_KEY \
+            ${{ env.IMAGE }}:${{ github.sha }}
+        if: github.event_name == 'push'
+
+      - name: Verify image signature
+        env:
+          COSIGN_PUBLIC_KEY: ${{ secrets.COSIGN_PUBLIC_KEY }}
+        run: |
+          cosign verify --key env://COSIGN_PUBLIC_KEY \
+            ${{ env.IMAGE }}:${{ github.sha }}
+        if: github.event_name == 'push'
 
       - name: Print image reference
         run: |

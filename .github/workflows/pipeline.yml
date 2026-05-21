@@ -59,6 +59,11 @@ jobs:
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
       
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+        if: github.event_name == 'push'
+
+      
       - name: Sign image with Cosign
         env:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}

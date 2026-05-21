@@ -28,3 +28,5 @@ secrets.yaml
 
 # Local session context (never push)
 context-for-next-session.md
+
+cosign.key

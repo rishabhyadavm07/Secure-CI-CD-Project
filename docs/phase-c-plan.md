@@ -1,219 +1,339 @@
-# Phase C — Advanced Security Plan
+# Phase C — Advanced Security
 
-> Builds on Phase B. All Phase B hardening must be complete before starting Phase C.
-> Phase B completed: 2026-05-27.
+**Theme:** Detection, enforcement, and GitOps. Phase B hardened the system. Phase C makes sure you know when something goes wrong and prevents policy drift.
 
----
-
-## Overview
-
-Phase C moves from **hardening** (making the system secure) to **observing and enforcing** (knowing when something goes wrong and preventing policy drift).
-
-Phase B secured the pipeline and the cluster configuration.
-Phase C secures **runtime behaviour**, **supply chain provenance**, and **operational visibility**.
+**Prerequisites:** Phase B fully complete.
+**Status:** Not started.
 
 ---
 
-## Tasks
+## Task List
+
+| ID | Task | Effort | Status |
+|----|------|--------|--------|
+| C1 | SBOM Generation | Low | ⏳ Not started |
+| C2 | Falco Runtime Security | Medium | ⏳ Not started |
+| C3 | Kyverno Policy Enforcement | Medium | ⏳ Not started |
+| C4 | ArgoCD GitOps | Medium | ⏳ Not started |
+| C5 | Prometheus + Grafana | High | ⏳ Not started |
+| C6 | GPG Signed Commits | Low | ⏳ Not started |
+| C7 | Incident Response Runbook | Low | ⏳ Not started |
+| C8 | Monthly Security Checklist | Low | ⏳ Not started |
 
 ---
 
-### C1 — SBOM Generation (Software Bill of Materials)
+## C1 — SBOM Generation (Software Bill of Materials)
 
-**What:** Automatically generate a list of every package, library, and dependency inside the Docker image on every build.
+**What it is:**
+An SBOM is the complete ingredient list of your container image — every OS package, library, and dependency with its name, version, and licence. Generated automatically on every build and stored as a build artefact.
 
-**Why:** You cannot secure what you cannot see. An SBOM is the ingredient list for your container image. When a new CVE is published (e.g. a critical OpenSSL vulnerability), you can immediately check whether your image is affected without rebuilding or scanning — just query the SBOM.
+**Why it matters:**
+When a critical CVE is published (e.g. a zero-day in OpenSSL), you can immediately query your SBOM to know if your image is affected — without rebuilding or scanning from scratch. This is how enterprise security teams achieve sub-hour response times on new CVEs.
 
-**How:**
-- Add `anchore/sbom-action` to `pipeline.yml` after the build step
-- Output in SPDX or CycloneDX format (both industry standards)
-- Attach SBOM as a build artifact to the GitHub Actions run
-- Optionally: attach SBOM to the container image in GHCR alongside the Cosign signature
+**Compliance relevance:**
+US Executive Order 14028 (2021) mandates SBOMs for all software sold to the US government. Enterprise procurement teams increasingly require SBOMs from vendors. Becoming standard practice.
+
+**Implementation:**
+- Add `anchore/sbom-action` step to `pipeline.yml` after the Docker build step
+- Output format: SPDX (industry standard, supported by GitHub)
+- Attach SBOM as a GitHub Actions artefact (downloadable from the Actions run)
+- Optionally: attach SBOM to the image in GHCR as a Cosign attestation (done in Phase E)
 
 **Tools:** Syft (by Anchore), `anchore/sbom-action`
 
-**Compliance relevance:** SBOM generation is required by US Executive Order 14028 (2021) for software sold to the US government. It is becoming standard in enterprise procurement requirements.
+**Pipeline position:**
+```
+Docker build → SBOM generation → Trivy scan → Push to GHCR
+```
+
+**Files to create/modify:**
+- `.github/workflows/pipeline.yml` — add SBOM step
+
+**Definition of done:**
+- [ ] SBOM generated on every push to main
+- [ ] SBOM downloadable as GitHub Actions artefact
+- [ ] SBOM contains all OS packages and libraries in the image
 
 ---
 
-### C2 — Falco Runtime Security
+## C2 — Falco Runtime Security
 
-**What:** Deploy Falco as a DaemonSet on the cluster. Falco watches every system call made by every container in real time and alerts when behaviour matches known attack patterns.
+**What it is:**
+Falco is a runtime threat detection engine that watches every system call made by every container in real time. When behaviour matches a known attack pattern, it fires an alert in milliseconds.
 
-**Why:** All Phase B controls are preventive — they reduce the attack surface. But if an attacker finds a zero-day or misconfiguration we missed, we need to know within seconds, not hours. Falco is the detection layer.
+**Why it matters:**
+All Phase B controls are preventive. Falco is the detection layer — the alarm system. If an attacker finds a zero-day, or if a misconfiguration is missed, Falco catches the behaviour while it is happening.
 
-**What Falco detects (examples):**
-- Shell spawned inside a container (`/bin/sh`, `/bin/bash` executed)
-- File written to a path that should be read-only
-- Outbound network connection to an unexpected IP
-- Privilege escalation attempt
-- Sensitive file read (`/etc/passwd`, `/etc/shadow`)
-- Crypto mining (connection to known mining pools)
+**What it detects (examples):**
 
-**How:**
-- Deploy Falco via Helm to a `falco` namespace (privileged — needs kernel access)
-- Configure custom rules for quiz-site behaviour (nginx should never spawn a shell)
-- Route alerts to stdout (visible in `kubectl logs`) and optionally to Slack/webhook
+| Rule | Attack it catches |
+|------|-----------------|
+| Shell spawned in container | Attacker drops to interactive shell |
+| Write to read-only path | Malware installation attempt |
+| Sensitive file read (`/etc/shadow`) | Credential harvesting |
+| Unexpected outbound connection | C2 (attacker's malware calling home) |
+| Execution from `/tmp` | Malware staging |
+| `kubectl exec` into production pod | Insider threat or post-compromise |
+| Crypto mining network patterns | Cryptojacking |
+
+**Implementation:**
+- Deploy Falco via Helm to `falco` namespace
+- Falco runs as DaemonSet — one instance per node
+- Add custom rule: quiz-site nginx should never spawn a shell
+- Route alerts to stdout (visible via `kubectl logs`)
 
 **Tools:** Falco, Helm, `falcosecurity/falco` Helm chart
 
+**Install commands:**
+```bash
+helm repo add falcosecurity https://falcosecurity.github.io/charts
+helm repo update
+helm install falco falcosecurity/falco \
+  --namespace falco \
+  --create-namespace \
+  --set driver.kind=ebpf
+```
+
+**Files to create:**
+- `k8s/falco/custom-rules.yaml` — quiz-site specific rules
+
+**Definition of done:**
+- [ ] Falco running as DaemonSet in `falco` namespace
+- [ ] Default ruleset active
+- [ ] Custom rule: alert if shell spawned in quiz-site container
+- [ ] Verified: test alert fires when `kubectl exec` into quiz-site pod
+
 ---
 
-### C3 — OPA / Kyverno Policy Enforcement
+## C3 — Kyverno Policy Enforcement
 
-**What:** Deploy a policy engine that enforces custom rules across all Kubernetes resources at admission time — beyond what PSA covers.
+**What it is:**
+Kyverno is a Kubernetes-native policy engine. It intercepts every resource creation/update request before it is accepted by the cluster and enforces custom rules that go beyond what PSA covers.
 
-**Why:** PSA enforces pod security. But it cannot enforce business rules like:
-- "All images must come from `ghcr.io/rishabhyadavm07/` only (no pulling from Docker Hub)"
-- "All deployments must have a `team` label"
-- "Images must have a Cosign signature before they can be deployed"
-- "No latest tag — all image references must use a digest or explicit version"
+**Why it matters:**
+PSA enforces pod security. Kyverno enforces business rules:
+- Only images from your trusted registry allowed
+- All images must have a Cosign signature
+- No `latest` tag — must use explicit version
+- All deployments must have required labels
 
-**Kyverno vs OPA/Gatekeeper:**
-- **Kyverno** — Kubernetes-native, policies written in YAML, easier to start with
-- **OPA Gatekeeper** — more powerful, policies written in Rego (a custom language), used in large enterprises
-
-Recommendation: start with **Kyverno**.
+This means Kubernetes itself rejects policy violations — not just your pipeline.
 
 **Policies to implement:**
-1. Require images from trusted registry only (`ghcr.io/rishabhyadavm07/*`)
-2. Require Cosign signature on all images
-3. Require `team` and `app` labels on all deployments
-4. Block `latest` tag on all images
+
+**Policy 1 — Trusted registry only**
+Block any image not from `ghcr.io/rishabhyadavm07/`. Prevents accidental pulls from Docker Hub or untrusted sources.
+
+**Policy 2 — Require Cosign signature**
+Every image must have a valid Cosign signature before it can be deployed. Even if someone pushes a rogue image to GHCR manually, it cannot be deployed without the signature.
+
+**Policy 3 — Block latest tag**
+Reject any deployment using `:latest`. Forces explicit version or digest — ensures deployments are deterministic and auditable.
+
+**Policy 4 — Require labels**
+Every deployment must have `app` and `team` labels. Enables tracking, cost attribution, and incident response.
 
 **Tools:** Kyverno, Helm
 
+**Install commands:**
+```bash
+helm repo add kyverno https://kyverno.github.io/kyverno/
+helm repo update
+helm install kyverno kyverno/kyverno \
+  --namespace kyverno \
+  --create-namespace
+```
+
+**Files to create:**
+- `k8s/kyverno/trusted-registry.yaml`
+- `k8s/kyverno/require-cosign.yaml`
+- `k8s/kyverno/block-latest-tag.yaml`
+- `k8s/kyverno/require-labels.yaml`
+
+**Definition of done:**
+- [ ] Kyverno running in `kyverno` namespace
+- [ ] All 4 policies active
+- [ ] Verified: deployment from Docker Hub is rejected
+- [ ] Verified: unsigned image is rejected
+- [ ] Verified: `:latest` tag is rejected
+
 ---
 
-### C4 — GitOps with ArgoCD
+## C4 — ArgoCD GitOps
 
-**What:** Replace `kubectl apply` with ArgoCD — a GitOps controller that continuously syncs the cluster state to what is defined in the Git repository.
+**What it is:**
+ArgoCD is a GitOps controller. It continuously watches your Git repository and syncs the cluster state to match exactly what is in `k8s/base/`. Any manual change to the cluster is detected as drift and can be auto-reverted.
 
-**Why:** Currently you apply changes manually with `kubectl apply`. This means:
-- There is no record of who applied what and when (outside of git commits)
+**Why it matters:**
+Currently you deploy with `kubectl apply` manually. Problems with this:
+- No audit trail of who deployed what and when
 - Cluster state can drift from the repo (someone runs `kubectl edit` directly)
-- Rollbacks require manual intervention
+- Rollback requires manual intervention
 
 With ArgoCD:
-- The cluster automatically syncs to the git repo every few minutes
-- Any manual change to the cluster is detected as "out of sync" and reverted
-- Deployments are git commits — full audit trail, instant rollback via `git revert`
-- You get a UI showing the health of every resource
+- Every deployment is a git commit — full audit trail
+- Manual cluster changes are flagged as "OutOfSync"
+- Rollback = `git revert` + ArgoCD auto-applies
 
-**How:**
-- Install ArgoCD via Helm to an `argocd` namespace
-- Create an `Application` resource pointing to `k8s/base/` in your repo
-- ArgoCD watches the repo and applies changes automatically on push
+**Implementation:**
+- Install ArgoCD via Helm to `argocd` namespace
+- Create an `Application` resource pointing at `k8s/base/` in your GitHub repo
+- ArgoCD watches the repo and applies on every change automatically
+- Access the ArgoCD UI at `localhost:8080` via port-forward
 
-**Tools:** ArgoCD, Helm
+**Install commands:**
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update
+helm install argocd argo/argo-cd \
+  --namespace argocd \
+  --create-namespace
+```
+
+**Files to create:**
+- `k8s/argocd/application.yaml` — ArgoCD Application resource
+
+**Definition of done:**
+- [ ] ArgoCD running in `argocd` namespace
+- [ ] ArgoCD Application synced to `k8s/base/`
+- [ ] Status shows `Synced` and `Healthy`
+- [ ] Verified: manual `kubectl edit` on deployment is detected as drift
+- [ ] Verified: git commit to `k8s/base/` triggers automatic sync
 
 ---
 
-### C5 — Prometheus + Grafana Observability
+## C5 — Prometheus + Grafana Observability
 
-**What:** Deploy Prometheus (metrics collection) and Grafana (dashboards) to monitor the cluster and the quiz-site application.
+**What it is:**
+Prometheus collects metrics from the cluster and pipeline. Grafana displays them as dashboards and fires alerts when thresholds are crossed.
 
-**Why:** You cannot respond to incidents if you cannot see what is happening. Observability is also a security concern — unusual traffic spikes, error rate increases, and resource exhaustion are often the first signs of an attack.
+**Why it matters:**
+Security is not a one-time state — it is continuous. Without metrics you find out something is wrong when an incident happens, not before. Observability lets you see anomalies before they become incidents.
 
 **What to monitor:**
-- Pod CPU and memory usage (against ResourceQuota limits from B13)
-- HTTP request rate and error rate (via nginx metrics)
-- Pod restart count (frequent restarts = crash loop or attack)
-- Network traffic volume (spike could indicate data exfiltration)
-- Kubernetes API server audit events
 
-**How:**
-- Deploy `kube-prometheus-stack` via Helm (includes Prometheus + Grafana + AlertManager + pre-built dashboards)
-- Add nginx metrics exporter (`nginx-prometheus-exporter`) as a sidecar
-- Configure AlertManager to send alerts on:
-  - Pod crash loop
-  - CPU/memory near quota limits
-  - HTTP 5xx error rate above threshold
+| Metric | Why |
+|--------|-----|
+| Pod CPU/memory vs ResourceQuota | Spike = possible cryptomining or attack |
+| Pod restart count | Crash loop = instability or attack |
+| HTTP 5xx rate | Spike = app under attack or broken |
+| Falco alert rate by severity | Spike = active attack or misconfiguration |
+| ArgoCD sync status | OutOfSync = drift from expected state |
+| Pipeline success/failure rate | Drop = broken security gate |
 
-**Tools:** Prometheus, Grafana, AlertManager, `kube-prometheus-stack` Helm chart
+**Install commands:**
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --create-namespace
+```
 
----
+**Files to create:**
+- `k8s/monitoring/grafana-dashboard-security.json` — custom security dashboard
 
-### C6 — Signed Commits (Commit Signing)
-
-**What:** Require all commits to `main` to be GPG-signed. GitHub shows a "Verified" badge on signed commits.
-
-**Why:** Git does not verify identity. Anyone with write access (or who steals a token) can commit as any name and email. GPG signing cryptographically proves a commit came from a specific key, not just a specific username.
-
-**How:**
-- Generate a GPG key locally
-- Add public key to GitHub account
-- Configure `git config commit.gpgsign true` locally
-- Enable "Require signed commits" in branch protection rules on `main`
-
-**Tools:** GPG, GitHub branch protection
+**Definition of done:**
+- [ ] Prometheus running in `monitoring` namespace
+- [ ] Grafana accessible at `localhost:3000` via port-forward
+- [ ] Pre-built Kubernetes dashboards loading
+- [ ] Custom security dashboard showing pod restarts, CPU/memory, Falco alert rate
+- [ ] AlertManager configured: alert on pod crash loop
 
 ---
 
-### C7 — Incident Response Runbook
+## C6 — GPG Signed Commits
 
-**What:** Write a documented runbook covering what to do when specific security events occur.
+**What it is:**
+Every commit to `main` is cryptographically signed with your GPG private key. GitHub shows a "Verified" badge. Branch protection enforces that unsigned commits cannot be merged.
 
-**Why:** When an incident happens, you do not want to figure out the response in real time. A runbook is a pre-written checklist — follow the steps, contain the incident, recover, document.
+**Why it matters:**
+Git does not verify identity. Anyone with your laptop or a stolen token can make commits that appear to be from you. GPG signing proves a commit came from your specific private key — not just your username.
+
+**Enterprise context:**
+At high-security organisations, the GPG private key lives on a hardware security key (YubiKey). Even if the machine is compromised, the attacker cannot sign commits without physical possession of the YubiKey.
+
+**Implementation:**
+```bash
+gpg --full-generate-key
+git config --global user.signingkey YOUR_KEY_ID
+git config --global commit.gpgsign true
+gpg --armor --export YOUR_KEY_ID
+# Add public key to GitHub → Settings → SSH and GPG keys
+```
+
+Enable in GitHub branch protection: **Require signed commits** on `main`.
+
+**Definition of done:**
+- [ ] GPG key generated and added to GitHub
+- [ ] `git config commit.gpgsign true` set globally
+- [ ] All commits show "Verified" badge on GitHub
+- [ ] Branch protection rule: require signed commits on `main`
+
+---
+
+## C7 — Incident Response Runbook
+
+**What it is:**
+A pre-written, step-by-step document covering exactly what to do when specific security events occur. Followed during an incident — no decisions needed under pressure.
 
 **Scenarios to cover:**
 
-| Trigger | Response steps |
+| Trigger | First response |
 |---------|---------------|
-| Falco alerts: shell spawned in container | Cordon node, capture forensics, kill pod, rotate secrets |
-| Trivy finds new CRITICAL CVE | Rebuild image, re-scan, re-deploy, update SBOM |
-| TruffleHog finds leaked secret in commit | Revoke secret immediately, rotate, force-push or revert commit |
-| Cosign verification fails in pipeline | Block deployment, investigate image provenance, audit GHCR access |
-| Pod exceeds ResourceQuota | Investigate cause, check for crypto mining, scale if legitimate |
-| ArgoCD shows cluster drift | Identify who changed what, revert to git state, investigate |
+| TruffleHog/Gitleaks detects leaked secret | Revoke immediately, rotate, assess exposure |
+| Trivy finds new CRITICAL CVE | Rebuild image, re-scan, re-deploy same day |
+| Falco: shell spawned in container | Cordon node, capture forensics, kill pod |
+| Cosign verification fails | Block deployment, audit GHCR access logs |
+| ArgoCD shows cluster drift | Identify what changed, who changed it, revert |
+| Pod crashes repeatedly | Check logs, check resource limits, check Falco |
+| ResourceQuota near limit | Investigate cause — legitimate load or attack? |
 
-**Output:** `docs/incident-response-runbook.md`
+**Files to create:**
+- `docs/incident-response-runbook.md`
 
----
-
-### C8 — Monthly Security Review Checklist
-
-**What:** A documented checklist to run every month to catch security drift.
-
-**Items:**
-- Review all Dependabot PRs — merge or dismiss with reason
-- Check GitHub Security tab for new Checkov and Trivy findings
-- Review Falco alert history for unusual patterns
-- Check ResourceQuota usage — are we approaching limits?
-- Rotate Cosign private key (annually)
-- Review RBAC — any new ServiceAccounts created?
-- Review branch protection rules — still enforced?
-- Check for unused secrets in GitHub Secrets
-- Review ArgoCD sync history — any unexplained drifts?
-
-**Output:** `docs/monthly-security-checklist.md`
+**Definition of done:**
+- [ ] Runbook covers all 7 scenarios
+- [ ] Each scenario has: trigger, immediate action, investigation steps, recovery steps, post-incident actions
 
 ---
 
-## Recommended Order
+## C8 — Monthly Security Checklist
 
-| Order | Task | Effort | Value |
-|-------|------|--------|-------|
-| 1 | C1 — SBOM Generation | Low | High — supply chain visibility |
-| 2 | C6 — Signed Commits | Low | Medium — identity assurance |
-| 3 | C3 — Kyverno Policies | Medium | High — enforces image trust |
-| 4 | C2 — Falco | Medium | High — runtime detection |
-| 5 | C4 — ArgoCD | Medium | High — GitOps + drift prevention |
-| 6 | C5 — Prometheus + Grafana | High | High — observability |
-| 7 | C7 — Incident Response Runbook | Low | High — operational readiness |
-| 8 | C8 — Monthly Checklist | Low | Medium — ongoing hygiene |
+**What it is:**
+A recurring checklist of hygiene tasks to run every month to catch security drift before it becomes a problem.
 
-**Start with C1** — it's a single GitHub Actions step, takes 30 minutes, and immediately gives you supply chain visibility.
+**Checklist items:**
+- [ ] Review all open Dependabot PRs — merge or dismiss with written reason
+- [ ] Check GitHub Security tab — new Checkov/Trivy/Semgrep findings?
+- [ ] Review Falco alert history — any patterns worth investigating?
+- [ ] Check ResourceQuota usage — approaching limits?
+- [ ] Review ArgoCD sync history — any unexplained drifts?
+- [ ] Check Grafana dashboards — any anomalies in past 30 days?
+- [ ] Review RBAC — any new ServiceAccounts created?
+- [ ] Review GitHub Actions workflow permissions — any unnecessary `write` permissions?
+- [ ] Rotate Cosign private key (every 12 months)
+- [ ] Check branch protection rules — still enforced on main?
+- [ ] Check GitHub Secret Scanning alerts — any new findings?
+- [ ] Verify Falco is still running: `kubectl get pods -n falco`
+- [ ] Verify ArgoCD is synced: check UI or `argocd app list`
+
+**Files to create:**
+- `docs/monthly-security-checklist.md`
+
+**Definition of done:**
+- [ ] Checklist document written
+- [ ] First monthly review completed and documented
 
 ---
 
-## What Phase C Completes
+## Phase C — Completion Checklist
 
-At the end of Phase C, the project will demonstrate:
-
-- **Prevent** — hardened images, network policies, PSA, RBAC, resource limits, policy enforcement
-- **Detect** — Falco runtime alerts, Prometheus anomaly monitoring, audit logs
-- **Respond** — documented runbooks, ArgoCD rollback, incident checklists
-- **Prove** — SBOMs, Cosign signatures, signed commits, SARIF findings in Security tab
-
-This covers the full DevSecOps lifecycle and maps directly to the CI/CD Security guide shared at the start of Phase C.
+- [ ] C1: SBOM generated on every pipeline run
+- [ ] C2: Falco running, custom rules active, test alert verified
+- [ ] C3: Kyverno running, all 4 policies enforced and tested
+- [ ] C4: ArgoCD synced to repo, drift detection verified
+- [ ] C5: Prometheus + Grafana running, security dashboard active
+- [ ] C6: GPG signing on all commits, branch protection enforced
+- [ ] C7: Incident response runbook written and reviewed
+- [ ] C8: Monthly checklist written, first run completed

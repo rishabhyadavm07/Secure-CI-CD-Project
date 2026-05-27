@@ -1,440 +1,244 @@
-# Secure CI/CD Pipeline – Progress Tracker
+# Secure CI/CD Pipeline — Progress Tracker
 
-_Last Updated: May 2026_
+_Last updated: 2026-05-27_
 
 ---
-
-# Project Overview
 
 ## Project Goal
 
-Build a production-grade Secure CI/CD pipeline implementing:
-
-- Shift-left security
-- Automated security scanning
-- Secure container workflows
-- GitHub-native security integration
-- DevSecOps best practices
-- Future Kubernetes security architecture
-
----
-
-# Current Project Status
-
-## Current Phase
-# Phase 3 — Automated SAST & CI/CD Security Integration
-
-## Overall Progress
-
-| Phase | Status |
-|---|---|
-| Environment Setup | ✅ Completed |
-| Application Containerization | ✅ Completed |
-| Git + GitHub Integration | ✅ Completed |
-| Local Secret Detection | ✅ Completed |
-| CI Secret Scanning | ✅ Completed |
-| Automated SAST Pipeline | ✅ Completed |
-| SARIF + GitHub Security Integration | ✅ Completed |
-| Custom Semgrep Policies | 🔄 In Progress |
-| Container Security | ⏳ Next |
-| Kubernetes Security | ⏳ Planned |
+Build a production-grade, fully documented DevSecOps pipeline demonstrating:
+- Shift-left security (catch issues at commit time)
+- Automated security scanning at every layer
+- Supply chain integrity (signed, attested, provenance-tracked artefacts)
+- Kubernetes hardening from pod to namespace to cluster
+- Runtime threat detection and observability
+- Secrets management with a dedicated vault
+- Compliance against CIS, NSA/CISA, and OWASP standards
 
 ---
 
-# Current Security Pipeline Architecture
+## Overall Status
 
-```text
-Developer
-   ↓
-Local Semgrep Scan
-   ↓
-Gitleaks Pre-Commit Hook
-   ↓
-GitHub Push
-   ↓
-TruffleHog GitHub Action
-   ↓
-Semgrep SAST Scan
-   ↓
-SARIF Generation
-   ↓
-GitHub Security Upload
-   ↓
-GitHub Code Scanning Alerts
-Completed Work
-1. Development Environment Setup
-Completed
-Kali Linux running on WSL2
-Docker Desktop integrated with WSL2
-VS Code Remote WSL workflow configured
-Git configured
-GitHub SSH authentication configured
-Project stored inside Linux filesystem for performance optimization
-Current Architecture
-Windows 11
-   ↓
-Docker Desktop
-   ↓
-Kali Linux WSL2
-   ↓
-VS Code Remote WSL
-Notes
-WSL2 backend used instead of native Windows Docker workflow
-Project intentionally stored inside Linux filesystem instead of /mnt/c
-Docker Desktop used as container runtime
-Kubernetes intentionally postponed until later phases
-2. Project Structure
-Created Structure
-.
-├── .github
-│   └── workflows
-├── docker
-├── docs
-├── k8s
-│   ├── base
-│   └── overlays
-│       ├── production
-│       └── staging
-├── quiz-site
-│   ├── app.js
-│   ├── data
-│   ├── index.html
-│   └── style.css
-├── scripts
-└── .semgrep.yml
-Notes
-Structure prepared early for future Kubernetes overlays and CI/CD workflows
-quiz-site selected as protected application for DevSecOps pipeline
-3. Application Containerization
-Completed
-Initial Dockerfile created
-Nginx-based container setup completed
-quiz-site successfully containerized
-Local container testing completed
-Current Dockerfile
-FROM nginx:alpine
+| Phase | Theme | Status |
+|-------|-------|--------|
+| A | Build the pipeline | ✅ Complete |
+| B | Secure the pipeline + Kubernetes | ✅ Complete |
+| C | Detection, enforcement, GitOps | ⏳ Not started |
+| D | Secrets management | ⏳ Not started |
+| E | Advanced supply chain security | ⏳ Not started |
+| F | Compliance + final hardening | ⏳ Not started |
+| G | Jenkins CI/CD (enterprise alternative pipeline) | ⏳ Not started |
 
-COPY quiz-site /usr/share/nginx/html
+---
 
-EXPOSE 80
-Container Validation
-Docker build successful
-Container networking functional
-localhost accessible
-Static application successfully served through nginx
-Notes
-Started with simple Dockerfile intentionally
-Hardening postponed until container security phase
-4. Git & GitHub Integration
-Completed
-Git repository initialized
-GitHub repository connected
-SSH authentication configured
-Initial commits pushed successfully
-Important Fixes
-Solved Git identity configuration issue
-Solved GitHub HTTPS authentication issue
-Migrated from HTTPS authentication to SSH
-Notes
-SSH selected over PAT authentication
-Better aligned with DevOps and GitOps workflows
-5. Local Secret Detection Layer
-Installed Tools
-Gitleaks
-TruffleHog
-Current Strategy
-Tool	Purpose
-Gitleaks	Local pre-commit enforcement
-TruffleHog	CI/CD deep scanning
-Implemented
-Local Gitleaks pre-commit hook
-Automatic commit blocking on detected secrets
-Current Workflow
-Developer Commit
-    ↓
-Gitleaks Hook
-    ↓
-Secret Detection
-    ↓
-Commit Allowed / Blocked
-Notes
-TruffleHog intentionally removed from local pre-commit flow
-Gitleaks provides faster developer experience locally
-TruffleHog better suited for CI/CD and historical scanning
-6. CI/CD Secret Scanning
-Completed
-GitHub Actions workflow created
-TruffleHog CI workflow implemented
-Automated repository secret scanning enabled
-Current Workflow
-GitHub Push
-    ↓
-GitHub Actions Trigger
-    ↓
-TruffleHog Repository Scan
-    ↓
-Pipeline Pass / Fail
-Key Learnings
-GitHub Actions workflow syntax
-GitHub Actions permissions model
-CI/CD automation flow
-Secret scanning integration patterns
-7. Automated SAST Pipeline
-Installed
-Semgrep
-Implemented
-Local Semgrep testing
-GitHub Actions Semgrep workflow
-Automated SAST scanning
-SARIF report generation
-GitHub Code Scanning integration
-Current Workflow
-GitHub Push
-    ↓
-Semgrep Scan
-    ↓
-SARIF Generation
-    ↓
-GitHub Security Upload
-    ↓
-Code Scanning Alerts
-Current Capabilities
+## Phase A — Complete
 
-Semgrep currently scans:
+Built the foundation: working CI/CD pipeline, containerised application, Kubernetes deployment.
 
-JavaScript
-YAML
-Docker-related configs
-GitHub Actions workflows
-Key Milestone Achieved
+| Task | Description | Status |
+|------|-------------|--------|
+| A1 | Environment setup (WSL2 Kali, Docker Desktop, VS Code) | ✅ |
+| A2 | quiz-site application containerised with nginx | ✅ |
+| A3 | GitHub repository + SSH authentication | ✅ |
+| A4 | GitHub Actions pipeline — build and push to GHCR | ✅ |
+| A5 | Kubernetes deployment on Docker Desktop | ✅ |
 
-✅ GitHub Security Tab integration working successfully
+---
 
-8. SARIF Integration
-Completed
-SARIF generation configured
-SARIF upload workflow working
-GitHub Code Scanning alerts functional
-Important Issues Solved
-Issue 1 — Workflow Permissions
+## Phase B — Complete
 
-Resolved:
+Secured the pipeline and hardened the Kubernetes cluster.
 
-permissions:
-  security-events: write
-  contents: read
-Issue 2 — Repository Security Configuration
+### Part 1 — Pipeline Security
 
-Resolved:
+| Task | Description | Status |
+|------|-------------|--------|
+| B1 | Gitleaks pre-commit hook (local secret detection) | ✅ |
+| B2 | TruffleHog CI secret scanning | ✅ |
+| B3 | Semgrep SAST with custom rules | ✅ |
+| B4 | Checkov IaC scanning (Dockerfile + k8s) | ✅ |
+| B4b | Hardened Dockerfile (non-root, nginx:1.31-alpine, port 8080) | ✅ |
+| B5 | Trivy container CVE scanning (blocks on CRITICAL/HIGH) | ✅ |
+| B6 | Cosign image signing (key-based) | ✅ |
+| B7 | Dependabot (Docker + GitHub Actions, weekly) | ✅ |
 
-Enabled GitHub Code Scanning
-Configured repository security settings correctly
-Key Learnings
-GitHub security-event permissions
-SARIF integration flow
-GitHub security APIs
-Security workflow authorization boundaries
-9. Custom Semgrep Policies
-Current Status
+### Part 2 — Kubernetes Hardening
 
-🔄 In Progress
+| Task | Description | Status |
+|------|-------------|--------|
+| B8 | Security contexts (non-root, read-only FS, drop ALL caps, seccomp) | ✅ |
+| B9 | Network policies (default deny-all, allow port 8080) | ✅ |
+| B10 | RBAC (dedicated ServiceAccount, no token mount) | ✅ |
+| B11 | Checkov k8s SARIF upload to GitHub Security tab | ✅ |
+| B12 | Pod Security Admission (enforce: restricted) | ✅ |
+| B13 | ResourceQuota + LimitRange | ✅ |
 
-Current Work
+---
 
-Implementing:
+## Phase C — Detection, Enforcement, GitOps
 
-Custom Semgrep rules
-Severity tuning
-Policy-driven security detection
-Security governance model
-Planned Rules
-Dangerous eval detection
-innerHTML XSS detection
-Hardcoded password detection
-Weak randomness detection
-Debug statement detection
-Goal
+**Theme:** Know when something goes wrong. Prevent policy drift.
+**Detail:** See `docs/phase-c-plan.md`
 
-Transition from:
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| C1 | SBOM generation (Syft/anchore-action) | Low | ⏳ |
+| C2 | Falco runtime threat detection | Medium | ⏳ |
+| C3 | Kyverno policy enforcement (trusted registry, signed images, no latest) | Medium | ⏳ |
+| C4 | ArgoCD GitOps (auto-sync cluster to git, drift detection) | Medium | ⏳ |
+| C5 | Prometheus + Grafana observability | High | ⏳ |
+| C6 | GPG signed commits + branch protection enforcement | Low | ⏳ |
+| C7 | Incident response runbook | Low | ⏳ |
+| C8 | Monthly security checklist | Low | ⏳ |
 
-Tool-defined security
+---
 
-to:
+## Phase D — Secrets Management
 
-Policy-defined security
-Architectural Changes From Original Plan
-1. Kubernetes Deferred
-Original Plan
-Enable Kubernetes immediately
-Actual Implementation
-Kubernetes intentionally postponed
-Reason
-Focus first on Docker fundamentals
-Reduce system overhead
-Build strong CI/CD and security foundations first
-2. Kali Linux Used Instead of Ubuntu
-Original Plan
-Ubuntu WSL2
-Actual Implementation
-Kali Linux WSL2
-Reason
-Better alignment with security tooling
-Better offensive security workflow integration
-Improved bug bounty tooling ecosystem
-3. Layered Secret Detection Strategy Added
-Original Plan
-TruffleHog-only
-Actual Implementation
-Gitleaks → Local enforcement
-TruffleHog → CI/CD scanning
-Reason
-Faster local workflow
-Better developer experience
-More realistic enterprise AppSec model
-4. Security Visibility Added
-Original Plan
-Security scanning only
-Actual Implementation
-Security Scanning
-    +
-SARIF
-    +
-GitHub Security Integration
-Result
-Persistent security findings
-GitHub-native security alerts
-Centralized security visibility
-Current Security Posture
-Implemented
-SSH Git authentication
-Containerized application
-Isolated Linux development environment
-Local secret detection
-CI/CD secret scanning
-Automated SAST scanning
-GitHub Security integration
-SARIF reporting
-Security workflow automation
-Not Yet Implemented
-Container vulnerability scanning
-Dependency scanning
-Image signing
-SBOM generation
-Kubernetes security policies
-Runtime security monitoring
-Falco runtime detection
-Prometheus/Grafana monitoring stack
-Current Maturity Level
-Current Stage
+**Theme:** Secrets never live in git, plain env vars, or unencrypted cluster storage.
+**Detail:** See `docs/phase-d-plan.md`
 
-Transitioning from:
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| D1 | GitHub push protection (block secrets before they land in git) | Low | ⏳ |
+| D2 | Kubernetes Secrets encryption at rest (etcd) | Low | ⏳ |
+| D3 | External Secrets Operator (pull secrets from vault into cluster) | Medium | ⏳ |
+| D4 | HashiCorp Vault (dedicated secrets engine, dynamic secrets, audit log) | High | ⏳ |
+| D5 | Secret rotation (all existing secrets rotated, procedure documented) | Medium | ⏳ |
 
-Secure Development Workflow
+---
 
-to:
+## Phase E — Advanced Supply Chain Security
 
-Automated DevSecOps Security Pipeline
-Current Security Model
-Local Developer Security
-+
-CI/CD Security Automation
-+
-GitHub Security Visibility
-+
-Policy-Driven SAST
-Key Learnings So Far
-Infrastructure
-WSL2 architecture
-Docker Desktop integration
-Linux filesystem optimization
-Container lifecycle basics
-DevOps
-Git workflows
-SSH authentication
-GitHub Actions
-CI/CD workflow automation
-DevSecOps
-Shift-left security
-Secret scanning architecture
-Local vs CI/CD enforcement
-SARIF integration
-Automated SAST pipelines
-Security Engineering
-Workflow permissions
-Security-event authorization
-Detection layering
-Security governance concepts
-Severity-based enforcement
-Policy-driven scanning
-Current Assessment
-Status
+**Theme:** Every artefact has a verifiable, tamper-proof chain of custody.
+**Detail:** See `docs/phase-e-plan.md`
 
-✅ Strong DevSecOps foundation established
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| E1 | Digest pinning (Dockerfile, k8s deployment, GitHub Actions) | Low | ⏳ |
+| E2 | SLSA Level 1 provenance attestation | Medium | ⏳ |
+| E3 | Cosign keyless signing (OIDC, replace key-based) | Medium | ⏳ |
+| E4 | SBOM attestation (attach SBOM to image in GHCR) | Low | ⏳ |
 
-Pipeline State
-Stable
-Functional
-Automated
-Security-integrated
-Complexity Level
+---
 
-Intermediate and rapidly approaching advanced DevSecOps territory.
+## Phase F — Compliance & Final Hardening
 
-Next Planned Phase
-Container Security & Image Scanning
-Next Tasks
-Trivy integration
-Docker image vulnerability scanning
-Base image analysis
-CVE management
-Container hardening
-Security quality gates for images
-Future Planned Stack
-Gitleaks
-TruffleHog
-Semgrep
-Trivy
-Checkov
-Cosign
-Falco
-Prometheus/Grafana
-Long-Term Planned Architecture
-Developer
-   ↓
-Local Security Enforcement
-   ↓
-GitHub Push
-   ↓
-CI/CD Security Automation
-   ↓
-Container Security
-   ↓
-Image Signing
-   ↓
-Kubernetes Deployment
-   ↓
-Runtime Security Monitoring
-Overall Project Assessment
-Current Position
+**Theme:** Verify against industry benchmarks. Document everything.
+**Detail:** See `docs/phase-f-plan.md`
 
-The project has evolved from:
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| F1 | kube-bench CIS Kubernetes Benchmark | Medium | ⏳ |
+| F2 | Trivy compliance scanning (NSA/CISA, CIS Docker) | Low | ⏳ |
+| F3 | Remove Checkov soft_fail (hard gate on IaC violations) | Low | ⏳ |
+| F4 | Final security posture report (all controls, framework mappings) | Medium | ⏳ |
 
-Basic CI/CD Learning Project
+---
 
-into:
+## Security Controls Summary (Phase A + B complete)
 
-Realistic DevSecOps Security Pipeline
-Biggest Achievements
-Shift-left security implementation
-GitHub-native security integration
-Automated SAST pipeline
-SARIF security visibility
-Layered secret detection architecture
-Current Readiness
+```
+Developer workstation
+  ├── Gitleaks pre-commit hook
+  └── GPG commit signing (Phase C)
 
-The project is now properly prepared for:
+GitHub push → main (branch protected, PRs required)
+  ├── TruffleHog — secret scanning
+  ├── Semgrep — SAST with custom rules
+  └── Checkov — IaC scanning (Dockerfile + k8s manifests)
+        ↓ all pass
+  Docker build (hardened nginx:1.31-alpine, non-root, port 8080)
+        ↓
+  Trivy — CVE scan (blocks CRITICAL/HIGH)
+        ↓ passes
+  Push to GHCR
+  Cosign sign + verify
+  Dependabot watching for updates weekly
 
-Container security
-Supply chain security
-Kubernetes security
-Runtime security phases
+Kubernetes cluster (Docker Desktop)
+  Namespace: quiz-app
+    ├── Pod Security Admission: restricted enforced
+    ├── ResourceQuota: 5 pods, 500m CPU, 640Mi memory
+    ├── LimitRange: default and max per-container limits
+    ├── NetworkPolicy: default deny-all, allow port 8080 inbound only
+    ├── RBAC: dedicated ServiceAccount, no API permissions, no token
+    └── Deployment:
+          ├── runAsNonRoot: true (UID 101)
+          ├── readOnlyRootFilesystem: true
+          ├── capabilities: drop ALL
+          ├── allowPrivilegeEscalation: false
+          └── seccompProfile: RuntimeDefault
+```
+
+---
+
+## Planned Full Architecture (Phase F complete)
+
+```
+Developer workstation
+  ├── Gitleaks pre-commit
+  ├── GPG signed commits
+  └── Local Semgrep
+
+Source control (GitHub)
+  ├── Branch protection + required reviews
+  ├── Secret scanning + push protection
+  └── Dependabot
+
+CI/CD Pipeline (GitHub Actions)
+  ├── TruffleHog secret scan
+  ├── Semgrep SAST
+  ├── Checkov IaC scan (hard gate)
+  ├── Trivy CVE scan (hard gate)
+  ├── Trivy compliance scan
+  ├── SBOM generation
+  └── Cosign keyless signing + SLSA provenance
+
+Container Registry (GHCR)
+  └── Image with: signature, SBOM attestation, provenance attestation
+
+Secrets (HashiCorp Vault)
+  └── External Secrets Operator syncs to cluster
+
+Kubernetes cluster
+  ├── Kyverno: policy enforcement (trusted registry, signed images)
+  ├── ArgoCD: GitOps sync (drift detection + auto-remediation)
+  ├── Falco: runtime threat detection
+  ├── Prometheus + Grafana: observability + alerting
+  └── quiz-app namespace (all Phase B hardening)
+
+Compliance
+  ├── CIS Kubernetes Benchmark (kube-bench)
+  ├── NSA/CISA K8s Hardening Guide (Trivy compliance)
+  └── Security posture report (OWASP, CIS, NIST mapped)
+```
+
+---
+
+## Phase G — Jenkins CI/CD (Enterprise Alternative Pipeline)
+
+**Theme:** Same DevSecOps pipeline in Jenkins — platform-agnostic security skills.
+**Detail:** See `docs/phase-g-plan.md`
+
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| G1 | Deploy Jenkins in Kubernetes (Helm, persistent volume) | Medium | ⏳ |
+| G2 | Jenkinsfile — TruffleHog, Semgrep, Checkov, Trivy, Cosign | Medium | ⏳ |
+| G3 | Kubernetes plugin — ephemeral pod agents with Kaniko | Medium | ⏳ |
+| G4 | Vault plugin — all secrets pulled from HashiCorp Vault | Medium | ⏳ |
+| G5 | Shared Library — reusable security scan steps across repos | High | ⏳ |
+
+---
+
+## Key Learnings Log
+
+| Phase | Learning |
+|-------|---------|
+| B5 | SARIF upload blocked on PRs — use `github.event_name == 'push'` |
+| B6 | Cosign key-based: always `--tlog-upload=false --insecure-ignore-tlog` |
+| B6 | Use `git pull --rebase`, never "Update branch" button on GitHub |
+| B8 | nginx user UID/GID is 101; container port is 8080 not 80 |
+| B8 | `readOnlyRootFilesystem: true` needs emptyDir for `/var/cache/nginx`, `/var/run`, `/tmp` |
+| B8 | Do NOT put `user nginx;` in nginx.conf |
+| B12 | `restricted` PSA requires `seccompProfile: RuntimeDefault` — not just security contexts |

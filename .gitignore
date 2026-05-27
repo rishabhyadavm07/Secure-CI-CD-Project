@@ -30,3 +30,6 @@ secrets.yaml
 context-for-next-session.md
 
 cosign.key
+
+# Blog drafts (work in progress, not for public repo)
+blogs/

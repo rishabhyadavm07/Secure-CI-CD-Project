@@ -13,6 +13,7 @@ spec:
       labels:
         app: quiz-site
     spec:
+      serviceAccountName: quiz-site
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
